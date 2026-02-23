@@ -1,14 +1,14 @@
 const express = require("express")
 const router = express.Router()
-const { addAdminController, loginController, addTeacherController, addStudentController } = require("../Controllers/AdminController")
+const { registerAdmin, login, createTeacher, createStudent } = require("../Controllers/AdminController")
 const { authenticate, authorizeRoles } = require("../Middleware/authMiddleware")
 
-// Public routes (no auth)
-router.post("/add-admin", addAdminController)
-router.post("/login", loginController)
+// Public
+router.post("/register", registerAdmin)
+router.post("/login", login)
 
-// Protected: admin only
-router.post("/add-teacher", authenticate, authorizeRoles("admin"), addTeacherController)
-router.post("/add-student", authenticate, authorizeRoles("admin"), addStudentController)
+// Admin only
+router.post("/add-teacher", authenticate, authorizeRoles("admin"), createTeacher)
+router.post("/add-student", authenticate, authorizeRoles("admin"), createStudent)
 
 module.exports = router

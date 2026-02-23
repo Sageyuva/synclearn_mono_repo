@@ -6,16 +6,11 @@ app.use(express.json())
 
 const baseUrl = process.env.BASE_URL || "/api/"
 
-// Admin routes: add-admin, login, add-teacher, add-student
-const adminRoute = require("./Routes/AdminRoute")
-app.use(`${baseUrl}admin`, adminRoute)
-
-// Teacher routes: add-student
-const teacherRoute = require("./Routes/TeacherRoute")
-app.use(`${baseUrl}teacher`, teacherRoute)
+app.use(`${baseUrl}admin`, require("./Routes/AdminRoute"))
+app.use(`${baseUrl}teacher`, require("./Routes/TeacherRoute"))
+app.use(`${baseUrl}student`, require("./Routes/StudentRoute"))
 
 // Global error handler — must be LAST
-const errorHandler = require("./Middleware/errorHandler")
-app.use(errorHandler)
+app.use(require("./Middleware/errorHandler"))
 
 module.exports = app
