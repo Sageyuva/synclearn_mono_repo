@@ -1,15 +1,42 @@
 import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import PublicRoute from './components/PublicRoute';
+import PrivateRoute from './components/PrivateRoute';
+import LoginPage from './pages/LoginPage';
+import HomePage from './pages/HomePage';
 
 const App = () => {
   return (
-    <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">
-      <div className="glass-card p-8 rounded-xl border border-white/10 text-center">
-        <h1 className="text-4xl font-bold bg-gradient-to-r from-emerald-400 to-violet-500 bg-clip-text text-transparent mb-4">
-          SyncLearn Theme
-        </h1>
-        <p className="text-white/60">Ready for development.</p>
-      </div>
-    </div>
+    <BrowserRouter>
+      <Routes>
+        {/* Redirect root to /login */}
+        <Route path="/" element={<Navigate to="/login" replace />} />
+
+        {/* Public routes — accessible only when NOT logged in */}
+        <Route
+          path="/login"
+          element={
+            <PublicRoute>
+              <LoginPage />
+            </PublicRoute>
+          }
+        />
+
+        {/* Private routes — accessible only when logged in */}
+        <Route
+          path="/home"
+          element={
+            <PrivateRoute>
+              <HomePage />
+            </PrivateRoute>
+          }
+        />
+
+        {/* Catch-all */}
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    </BrowserRouter>
   );
 };
+
 export default App;
