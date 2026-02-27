@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { loginTeacher, loginAdmin } from '../api/authService';
+import { showToast } from '../utils/toast';
 
 const ROLES = [
     {
@@ -11,7 +13,6 @@ const ROLES = [
                     d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
             </svg>
         ),
-        endpoint: 'http://localhost:5000/api/teachers/login',
         gradient: 'from-emerald-500 to-teal-500',
         accent: 'emerald',
         placeholder: 'teacher@school.edu',
@@ -25,7 +26,6 @@ const ROLES = [
                     d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
             </svg>
         ),
-        endpoint: 'http://localhost:5000/api/admins/login',
         gradient: 'from-violet-500 to-purple-600',
         accent: 'violet',
         placeholder: 'admin@school.edu',
@@ -37,48 +37,38 @@ const WebsiteLoginPage = () => {
     const [activeRole, setActiveRole] = useState('teacher');
     const [formData, setFormData] = useState({ email: '', password: '' });
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
     const [showPassword, setShowPassword] = useState(false);
 
     const role = ROLES.find((r) => r.id === activeRole);
 
     const handleRoleSwitch = (id) => {
         setActiveRole(id);
-        setError('');
         setFormData({ email: '', password: '' });
     };
 
     const handleChange = (e) => {
         setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
-        setError('');
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
-        setError('');
 
         try {
-            const res = await fetch(role.endpoint, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(formData),
-            });
-
-            const data = await res.json();
-
-            if (!res.ok) {
-                throw new Error(data.message || 'Login failed. Please try again.');
+            // Route to the correct service method based on active role tab
+            if (activeRole === 'admin') {
+                await loginAdmin(formData);
+            } else {
+                await loginTeacher(formData);
             }
 
-            localStorage.setItem('token', data.token);
-            localStorage.setItem('user', JSON.stringify({ ...data.user, role: activeRole }));
-
-            navigate('/home', { replace: true });
-        } catch (err) {
-            setError(err.message);
-        } finally {
-            setLoading(false);
+            showToast.success(`Welcome back! Signed in as ${role.label}.`);
+            // Keep spinner ON during the 800ms delay for a smooth UX.
+            // navigate() unmounts the component, so no need to call setLoading(false).
+            setTimeout(() => navigate('/home', { replace: true }), 800);
+        } catch {
+            // Error toast is fired automatically by the Axios response interceptor.
+            setLoading(false); // Only reset spinner on failure, not on success.
         }
     };
 
@@ -100,16 +90,16 @@ const WebsiteLoginPage = () => {
             <div className="relative w-full max-w-md animate-fade-in">
                 <div
                     className={`glass-card border rounded-2xl p-8 transition-all duration-500 ${isAdmin
-                            ? 'border-violet-500/20 shadow-violet-glow'
-                            : 'border-emerald-500/20 shadow-emerald-glow'
+                        ? 'border-violet-500/20 shadow-violet-glow'
+                        : 'border-emerald-500/20 shadow-emerald-glow'
                         }`}
                 >
                     {/* Brand */}
                     <div className="text-center mb-6">
                         <div
                             className={`inline-flex items-center justify-center w-14 h-14 rounded-2xl border mb-3 transition-all duration-500 ${isAdmin
-                                    ? 'bg-violet-500/10 border-violet-500/30'
-                                    : 'bg-emerald-500/10 border-emerald-500/30'
+                                ? 'bg-violet-500/10 border-violet-500/30'
+                                : 'bg-emerald-500/10 border-emerald-500/30'
                                 }`}
                         >
                             <svg className={`w-7 h-7 transition-colors duration-500 ${isAdmin ? 'text-violet-400' : 'text-emerald-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -131,8 +121,8 @@ const WebsiteLoginPage = () => {
                                 type="button"
                                 onClick={() => handleRoleSwitch(r.id)}
                                 className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium cursor-pointer transition-all duration-300 ${activeRole === r.id
-                                        ? `bg-gradient-to-r ${r.gradient} text-white shadow-lg`
-                                        : 'text-white/40 hover:text-white/70'
+                                    ? `bg-gradient-to-r ${r.gradient} text-white shadow-lg`
+                                    : 'text-white/40 hover:text-white/70'
                                     }`}
                             >
                                 {r.icon}
@@ -149,16 +139,6 @@ const WebsiteLoginPage = () => {
                             ? 'Access school-wide management tools'
                             : 'Access your classroom and student data'}
                     </p>
-
-                    {/* Error */}
-                    {error && (
-                        <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm flex items-center gap-2">
-                            <svg className="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                            </svg>
-                            {error}
-                        </div>
-                    )}
 
                     <form onSubmit={handleSubmit} className="space-y-4">
                         {/* Email */}
@@ -178,8 +158,8 @@ const WebsiteLoginPage = () => {
                                     required
                                     placeholder={role.placeholder}
                                     className={`w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white placeholder-white/20 focus:outline-none text-sm transition-all duration-500 ${isAdmin
-                                            ? 'focus:border-violet-500/50'
-                                            : 'focus:border-emerald-500/50'
+                                        ? 'focus:border-violet-500/50'
+                                        : 'focus:border-emerald-500/50'
                                         }`}
                                 />
                             </div>
@@ -202,8 +182,8 @@ const WebsiteLoginPage = () => {
                                     required
                                     placeholder="••••••••"
                                     className={`w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-10 pr-10 text-white placeholder-white/20 focus:outline-none text-sm transition-all duration-500 ${isAdmin
-                                            ? 'focus:border-violet-500/50'
-                                            : 'focus:border-emerald-500/50'
+                                        ? 'focus:border-violet-500/50'
+                                        : 'focus:border-emerald-500/50'
                                         }`}
                                 />
                                 <button
@@ -238,7 +218,7 @@ const WebsiteLoginPage = () => {
                                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                                     </svg>
-                                    Signing in...
+                                    Signing in…
                                 </span>
                             ) : (
                                 `Sign in as ${role.label}`

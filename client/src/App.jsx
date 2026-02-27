@@ -1,5 +1,6 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
 import PublicRoute from './components/PublicRoute';
 import PrivateRoute from './components/PrivateRoute';
 import LoginPage from './pages/LoginPage';
@@ -8,6 +9,7 @@ import HomePage from './pages/HomePage';
 const App = () => {
   return (
     <BrowserRouter>
+      <Toaster position="top-right" />
       <Routes>
         {/* Redirect root to /login */}
         <Route path="/" element={<Navigate to="/login" replace />} />
