@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getAllLessons, getQuizForLesson, submitQuiz, getAnnouncements } from '../api/missionService';
 import { showToast } from '../utils/toast';
 
-// ─── Quiz Modal ───────────────────────────────────────────────────────────────
+// ─── Quiz Modal ────────────────────────────────────────────────────────────────
 const QuizModal = ({ lesson, onClose }) => {
     const [quiz, setQuiz] = useState(null);
     const [answers, setAnswers] = useState([]);
@@ -11,86 +12,70 @@ const QuizModal = ({ lesson, onClose }) => {
     const [result, setResult] = useState(null);
 
     useEffect(() => {
-        const load = async () => {
-            try {
-                const res = await getQuizForLesson(lesson._id);
+        getQuizForLesson(lesson._id)
+            .then(res => {
                 setQuiz(res.data);
                 setAnswers(new Array(res.data.questions.length).fill(null));
-            } catch {
-                showToast.error('Could not load quiz.');
-                onClose();
-            } finally {
-                setLoading(false);
-            }
-        };
-        load();
+            })
+            .catch(() => { showToast.error('Could not load quiz.'); onClose(); })
+            .finally(() => setLoading(false));
     }, [lesson._id, onClose]);
 
-    const handleSelect = (qIdx, optIdx) => {
-        setAnswers(prev => {
-            const next = [...prev];
-            next[qIdx] = optIdx;
-            return next;
-        });
-    };
+    const handleSelect = (qi, oi) =>
+        setAnswers(prev => { const n = [...prev]; n[qi] = oi; return n; });
 
     const handleSubmit = async () => {
         if (answers.some(a => a === null)) {
-            showToast.alert('Answer all 5 questions before submitting.');
-            return;
+            showToast.alert('Answer all questions before submitting.'); return;
         }
         setSubmitting(true);
         try {
             const res = await submitQuiz(quiz._id, answers);
             setResult(res.data);
-            showToast.success(`Assessment complete! Score: ${res.data.score}/${res.data.total}`);
-        } catch {
-            // interceptor handles toast
-        } finally {
-            setSubmitting(false);
-        }
+            showToast.success(`Score: ${res.data.score}/${res.data.total}`);
+        } catch { } finally { setSubmitting(false); }
     };
+
+    const OPTS = ['A', 'B', 'C', 'D'];
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
             style={{ background: 'rgba(3,7,18,0.92)', backdropFilter: 'blur(8px)' }}>
-            <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border"
-                style={{ background: '#0a0f1e', borderColor: '#B22222', boxShadow: '0 0 40px rgba(178,34,34,0.3)' }}>
+            <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-white/10 bg-slate-900 shadow-2xl">
 
                 {/* Header */}
-                <div className="flex items-center justify-between p-6 border-b" style={{ borderColor: '#B22222' }}>
+                <div className="flex items-center justify-between px-6 py-4 border-b border-white/8">
                     <div>
-                        <p className="text-xs font-mono mb-1" style={{ color: '#FFD700' }}>ASSESSMENT MODULE</p>
-                        <h2 className="text-xl font-bold text-white">{lesson.title}</h2>
+                        <p className="text-xs text-emerald-400 mb-0.5">Quiz · {lesson.category}</p>
+                        <h2 className="text-lg font-bold text-white">{lesson.title}</h2>
                     </div>
-                    <button onClick={onClose} className="text-white/40 hover:text-white/80 cursor-pointer text-2xl">✕</button>
+                    <button onClick={onClose} className="text-white/30 hover:text-white/70 cursor-pointer text-xl ml-4">✕</button>
                 </div>
 
                 <div className="p-6">
-                    {/* Result screen */}
                     {result ? (
-                        <div className="text-center py-12">
-                            <div className="text-6xl font-black mb-4" style={{ color: '#FFD700' }}>
+                        /* ── Result screen ── */
+                        <div className="text-center py-10">
+                            <div className="text-6xl font-black bg-gradient-to-r from-emerald-400 to-violet-500 bg-clip-text text-transparent mb-2">
                                 {result.score}/{result.total}
                             </div>
-                            <p className="text-white/60 mb-2">Assessment Score</p>
-                            <div className="w-full rounded-full h-3 mt-4 mb-6 bg-white/5">
-                                <div className="h-3 rounded-full transition-all duration-1000"
-                                    style={{ width: `${(result.score / result.total) * 100}%`, background: 'linear-gradient(90deg,#B22222,#FFD700)' }} />
+                            <p className="text-white/50 text-sm mb-6">Assessment complete</p>
+                            <div className="w-full rounded-full h-2.5 bg-white/5 mb-6">
+                                <div className="h-2.5 rounded-full bg-gradient-to-r from-emerald-500 to-violet-500 transition-all duration-1000"
+                                    style={{ width: `${(result.score / result.total) * 100}%` }} />
                             </div>
-                            <p className="text-sm text-white/40">
-                                {result.score === result.total ? '🏆 Perfect score! Outstanding.' :
-                                    result.score >= 3 ? '✅ Mission accomplished.' : '⚠️ Needs improvement. Review the lesson.'}
+                            <p className="text-sm text-white/40 mb-8">
+                                {result.score === result.total ? '🏆 Perfect! Outstanding work.' :
+                                    result.score >= 3 ? '✅ Well done! Mission accomplished.' : '📚 Keep studying. You can do better!'}
                             </p>
                             <button onClick={onClose}
-                                className="mt-8 px-8 py-3 rounded-xl font-semibold cursor-pointer"
-                                style={{ background: '#B22222', color: '#FFD700' }}>
-                                Close Debrief
+                                className="px-8 py-3 rounded-xl font-semibold cursor-pointer bg-gradient-to-r from-emerald-600 to-violet-600 text-white text-sm">
+                                Close
                             </button>
                         </div>
                     ) : loading ? (
                         <div className="flex justify-center py-16">
-                            <svg className="animate-spin w-10 h-10" style={{ color: '#FFD700' }} fill="none" viewBox="0 0 24 24">
+                            <svg className="animate-spin w-8 h-8 text-emerald-400" fill="none" viewBox="0 0 24 24">
                                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                             </svg>
@@ -98,36 +83,35 @@ const QuizModal = ({ lesson, onClose }) => {
                     ) : quiz ? (
                         <>
                             {quiz.questions.map((q, qi) => (
-                                <div key={qi} className="mb-6 p-4 rounded-xl border"
-                                    style={{ borderColor: 'rgba(178,34,34,0.3)', background: 'rgba(178,34,34,0.05)' }}>
-                                    <p className="text-sm font-mono mb-1" style={{ color: '#FFD700' }}>Q{qi + 1}</p>
-                                    <p className="text-white font-medium mb-4">{q.questionText}</p>
+                                <div key={qi} className="mb-5 p-4 rounded-xl border border-white/8 bg-white/2">
+                                    <p className="text-xs text-emerald-400 mb-1">Question {qi + 1}</p>
+                                    <p className="text-white font-semibold text-sm mb-3">{q.questionText}</p>
                                     <div className="grid grid-cols-1 gap-2">
-                                        {q.options.map((opt, oi) => (
-                                            <button key={oi} onClick={() => handleSelect(qi, oi)}
-                                                className="text-left px-4 py-3 rounded-lg text-sm transition-all duration-200 cursor-pointer border"
-                                                style={{
-                                                    borderColor: answers[qi] === oi ? '#FFD700' : 'rgba(255,255,255,0.1)',
-                                                    background: answers[qi] === oi ? 'rgba(255,215,0,0.1)' : 'rgba(255,255,255,0.03)',
-                                                    color: answers[qi] === oi ? '#FFD700' : 'rgba(255,255,255,0.7)',
-                                                }}>
-                                                <span className="font-mono mr-2" style={{ color: '#B22222' }}>
-                                                    {['A', 'B', 'C', 'D'][oi]}.
-                                                </span>
-                                                {opt}
-                                            </button>
-                                        ))}
+                                        {q.options.map((opt, oi) => {
+                                            const selected = answers[qi] === oi;
+                                            return (
+                                                <button key={oi} onClick={() => handleSelect(qi, oi)}
+                                                    className={`text-left px-4 py-2.5 rounded-lg text-sm border cursor-pointer transition-all ${selected
+                                                            ? 'border-violet-500 bg-violet-500/15 text-violet-300'
+                                                            : 'border-white/8 bg-white/2 text-white/60 hover:border-white/20 hover:text-white/80'
+                                                        }`}>
+                                                    <span className={`font-mono mr-2 ${selected ? 'text-violet-400' : 'text-emerald-400/60'}`}>
+                                                        {OPTS[oi]}.
+                                                    </span>
+                                                    {opt}
+                                                </button>
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             ))}
                             <button onClick={handleSubmit} disabled={submitting}
-                                className="w-full py-4 rounded-xl font-bold text-sm cursor-pointer disabled:opacity-50"
-                                style={{ background: 'linear-gradient(135deg, #B22222, #8B0000)', color: '#FFD700', border: '1px solid #FFD700' }}>
-                                {submitting ? 'Transmitting Results…' : '▶  SUBMIT ASSESSMENT'}
+                                className="w-full py-3.5 rounded-xl font-semibold text-sm cursor-pointer disabled:opacity-50 bg-gradient-to-r from-emerald-600 to-violet-600 text-white mt-2">
+                                {submitting ? 'Submitting…' : 'Submit Assessment'}
                             </button>
                         </>
                     ) : (
-                        <p className="text-center text-white/40 py-12">No quiz found for this mission.</p>
+                        <p className="text-center text-white/30 py-12 text-sm">No quiz attached to this lesson yet.</p>
                     )}
                 </div>
             </div>
@@ -135,88 +119,63 @@ const QuizModal = ({ lesson, onClose }) => {
     );
 };
 
-// ─── Lesson Viewer Modal ──────────────────────────────────────────────────────
+// ─── Lesson Modal ──────────────────────────────────────────────────────────────
 const LessonModal = ({ lesson, onClose, onStartQuiz }) => (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4"
         style={{ background: 'rgba(3,7,18,0.88)', backdropFilter: 'blur(6px)' }}>
-        <div className="w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl border"
-            style={{ background: '#0a0f1e', borderColor: '#FFD700', boxShadow: '0 0 40px rgba(255,215,0,0.15)' }}>
-            <div className="flex items-start justify-between p-6 border-b" style={{ borderColor: 'rgba(255,215,0,0.2)' }}>
+        <div className="w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl border border-white/10 bg-slate-900 shadow-2xl">
+            <div className="flex items-start justify-between px-6 py-5 border-b border-white/8">
                 <div>
-                    <p className="text-xs font-mono mb-1" style={{ color: '#B22222' }}>
-                        ◉ MISSION BRIEFING · {lesson.category.toUpperCase()}
-                    </p>
-                    <h2 className="text-2xl font-bold text-white">{lesson.title}</h2>
+                    <span className="text-xs px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/20">
+                        {lesson.category}
+                    </span>
+                    <h2 className="text-xl font-bold text-white mt-2">{lesson.title}</h2>
                     {lesson.teacherId && (
-                        <p className="text-sm mt-1 text-white/40">
-                            by {lesson.teacherId.name} · {lesson.teacherId.subject}
-                        </p>
+                        <p className="text-sm text-white/35 mt-1">by {lesson.teacherId.name} · {lesson.teacherId.subject}</p>
                     )}
                 </div>
-                <button onClick={onClose} className="text-white/40 hover:text-white/80 cursor-pointer text-2xl ml-4 shrink-0">✕</button>
+                <button onClick={onClose} className="text-white/30 hover:text-white/70 cursor-pointer text-xl ml-4 shrink-0">✕</button>
             </div>
-            <div className="p-6">
-                <div className="text-white/80 leading-relaxed whitespace-pre-wrap text-sm">
-                    {lesson.content}
-                </div>
+            <div className="px-6 py-5">
+                <p className="text-white/75 text-sm leading-relaxed whitespace-pre-wrap">{lesson.content}</p>
                 <button onClick={onStartQuiz}
-                    className="mt-8 w-full py-4 rounded-xl font-bold text-sm cursor-pointer"
-                    style={{ background: 'linear-gradient(135deg,#B22222,#8B0000)', color: '#FFD700', border: '1px solid #FFD700', boxShadow: '0 0 20px rgba(178,34,34,0.4)' }}>
-                    ▶  START ASSESSMENT
+                    className="mt-8 w-full py-3.5 rounded-xl font-semibold text-sm cursor-pointer bg-gradient-to-r from-emerald-600 to-violet-600 text-white hover:from-emerald-500 hover:to-violet-500 transition-all">
+                    Start Quiz →
                 </button>
             </div>
         </div>
     </div>
 );
 
-// ─── Mission Card ─────────────────────────────────────────────────────────────
-const MissionCard = ({ lesson, onOpen }) => (
+// ─── Lesson Card ───────────────────────────────────────────────────────────────
+const LessonCard = ({ lesson, onOpen }) => (
     <div onClick={() => onOpen(lesson)}
-        className="relative group rounded-xl border cursor-pointer transition-all duration-300 overflow-hidden"
-        style={{
-            background: 'linear-gradient(135deg, rgba(10,15,30,0.95), rgba(15,20,40,0.95))',
-            borderColor: lesson.isActive ? '#B22222' : 'rgba(255,255,255,0.08)',
-            boxShadow: lesson.isActive ? '0 0 20px rgba(178,34,34,0.2)' : 'none',
-        }}>
-        {/* Glow top bar active missions */}
-        {lesson.isActive && (
-            <div className="absolute top-0 left-0 right-0 h-0.5"
-                style={{ background: 'linear-gradient(90deg, transparent, #B22222, #FFD700, #B22222, transparent)' }} />
-        )}
-        <div className="p-5">
-            <div className="flex items-start justify-between mb-3">
-                <span className="text-xs font-mono px-2 py-1 rounded"
-                    style={{ background: 'rgba(178,34,34,0.15)', color: '#FFD700', border: '1px solid rgba(178,34,34,0.3)' }}>
-                    {lesson.category}
+        className="group p-5 rounded-2xl border border-white/8 bg-white/2 hover:bg-white/5 hover:border-white/15 cursor-pointer transition-all duration-200">
+        <div className="flex items-center justify-between mb-3">
+            <span className="text-xs px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/20">
+                {lesson.category}
+            </span>
+            {lesson.isActive && (
+                <span className="text-xs flex items-center gap-1 text-emerald-400">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Live
                 </span>
-                {lesson.isActive && (
-                    <span className="text-xs font-mono flex items-center gap-1" style={{ color: '#B22222' }}>
-                        <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-pulse" />
-                        ACTIVE
-                    </span>
-                )}
-            </div>
-            <h3 className="text-white font-bold text-base mb-2 group-hover:text-yellow-400 transition-colors">
-                {lesson.title}
-            </h3>
-            <p className="text-white/40 text-sm line-clamp-2 mb-4">
-                {lesson.content?.slice(0, 120)}…
-            </p>
-            {lesson.teacherId && (
-                <p className="text-xs text-white/30 font-mono">
-                    ↳ {lesson.teacherId.name} · {lesson.teacherId.subject}
-                </p>
             )}
-            <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between">
-                <span className="text-xs text-white/30">View Briefing</span>
-                <span style={{ color: '#FFD700' }}>→</span>
-            </div>
+        </div>
+        <h3 className="font-semibold text-white text-sm mb-1.5 group-hover:text-emerald-300 transition-colors">{lesson.title}</h3>
+        <p className="text-white/35 text-xs line-clamp-2 mb-4">{lesson.content?.slice(0, 120)}…</p>
+        {lesson.teacherId && (
+            <p className="text-xs text-white/25">{lesson.teacherId.name} · {lesson.teacherId.subject}</p>
+        )}
+        <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between">
+            <span className="text-xs text-white/30">Open lesson</span>
+            <span className="text-violet-400 text-sm group-hover:translate-x-1 transition-transform">→</span>
         </div>
     </div>
 );
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// ─── Main Page ─────────────────────────────────────────────────────────────────
 const MissionsPage = () => {
+    const navigate = useNavigate();
     const [lessons, setLessons] = useState([]);
     const [announcements, setAnnouncements] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -231,11 +190,7 @@ const MissionsPage = () => {
             const [lesRes, annRes] = await Promise.all([getAllLessons(), getAnnouncements()]);
             setLessons(lesRes.data || []);
             setAnnouncements(annRes.data || []);
-        } catch {
-            // interceptor handles toast
-        } finally {
-            setLoading(false);
-        }
+        } catch { } finally { setLoading(false); }
     }, []);
 
     useEffect(() => { load(); }, [load]);
@@ -246,87 +201,73 @@ const MissionsPage = () => {
     );
 
     return (
-        <div className="min-h-screen" style={{ background: '#030712', color: 'white' }}>
-
-            {/* HUD Top Bar */}
-            <div className="border-b px-6 py-4 flex items-center justify-between"
-                style={{ borderColor: 'rgba(178,34,34,0.3)', background: 'rgba(10,15,30,0.8)', backdropFilter: 'blur(8px)' }}>
-                <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg flex items-center justify-center"
-                        style={{ background: '#B22222', boxShadow: '0 0 12px rgba(178,34,34,0.5)' }}>
-                        <span className="text-sm font-black" style={{ color: '#FFD700' }}>S</span>
+        <div className="min-h-screen bg-slate-900 text-white">
+            {/* Top bar */}
+            <header className="border-b border-white/8 bg-slate-900/80 backdrop-blur sticky top-0 z-10">
+                <div className="max-w-5xl mx-auto px-5 py-3.5 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <button onClick={() => navigate('/home')} className="text-white/40 hover:text-white/70 cursor-pointer text-sm transition-colors">← Home</button>
+                        <span className="text-white/15">|</span>
+                        <span className="font-semibold text-white text-sm">My Lessons</span>
                     </div>
-                    <div>
-                        <p className="font-bold text-sm text-white">MISSION HUD</p>
-                        <p className="text-xs font-mono" style={{ color: '#B22222' }}>SyncLearn Student Portal</p>
-                    </div>
+                    <span className="text-xs text-white/30">{user.name}</span>
                 </div>
-                <div className="flex items-center gap-4">
-                    <span className="text-xs font-mono text-white/30">
-                        AGENT: <span className="text-white/60">{user.name?.toUpperCase() || 'UNKNOWN'}</span>
-                    </span>
-                    <button
-                        onClick={() => { localStorage.clear(); window.location.replace('/login'); }}
-                        className="text-xs px-3 py-1.5 rounded-lg cursor-pointer border"
-                        style={{ borderColor: 'rgba(178,34,34,0.4)', color: '#B22222' }}>
-                        LOGOUT
-                    </button>
-                </div>
-            </div>
+            </header>
 
-            <div className="max-w-6xl mx-auto px-6 py-8">
+            <div className="max-w-5xl mx-auto px-5 py-8">
 
-                {/* Announcements Banner */}
+                {/* Announcements strip */}
                 {announcements.length > 0 && (
-                    <div className="mb-8 rounded-xl border p-4 overflow-hidden"
-                        style={{ borderColor: '#FFD700', background: 'rgba(255,215,0,0.05)', boxShadow: '0 0 20px rgba(255,215,0,0.08)' }}>
-                        <p className="text-xs font-mono mb-2" style={{ color: '#FFD700' }}>📡 GLOBAL BROADCAST</p>
-                        {announcements.slice(0, 2).map(a => (
-                            <div key={a._id} className="mb-1">
-                                <span className="font-semibold text-white text-sm">{a.title}: </span>
-                                <span className="text-white/60 text-sm">{a.message}</span>
-                            </div>
-                        ))}
+                    <div className="mb-8 rounded-2xl border border-violet-500/20 bg-violet-500/5 p-4">
+                        <div className="flex items-center gap-2 mb-3">
+                            <span className="relative flex h-2 w-2">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75" />
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-violet-500" />
+                            </span>
+                            <p className="text-xs font-semibold text-violet-300">Admin Broadcasts</p>
+                        </div>
+                        <div className="space-y-2">
+                            {announcements.slice(0, 2).map(a => (
+                                <div key={a._id} className="text-sm">
+                                    <span className="font-medium text-white">{a.title}: </span>
+                                    <span className="text-white/55">{a.message}</span>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 )}
 
                 {/* Title + Search */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                     <div>
-                        <h1 className="text-3xl font-black text-white">
-                            ACTIVE <span style={{ color: '#FFD700' }}>MISSIONS</span>
-                        </h1>
-                        <p className="text-white/40 text-sm mt-1 font-mono">
-                            {filtered.length} briefings available
-                        </p>
+                        <h1 className="text-2xl font-bold text-white">Lessons</h1>
+                        <p className="text-white/35 text-sm mt-0.5">{filtered.length} available</p>
                     </div>
                     <input
                         type="text"
-                        placeholder="Search missions…"
+                        placeholder="Search lessons…"
                         value={search}
                         onChange={e => setSearch(e.target.value)}
-                        className="px-4 py-2.5 rounded-xl text-sm text-white placeholder-white/20 outline-none border w-full sm:w-72"
-                        style={{ background: 'rgba(255,255,255,0.03)', borderColor: 'rgba(178,34,34,0.3)' }}
+                        className="px-4 py-2.5 rounded-xl text-sm text-white placeholder-white/20 outline-none border border-white/10 bg-white/5 focus:border-emerald-500 transition-colors w-full sm:w-64"
                     />
                 </div>
 
-                {/* Missions Grid */}
+                {/* Grid */}
                 {loading ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         {[...Array(6)].map((_, i) => (
-                            <div key={i} className="h-48 rounded-xl animate-pulse"
-                                style={{ background: 'rgba(178,34,34,0.05)', border: '1px solid rgba(178,34,34,0.1)' }} />
+                            <div key={i} className="h-44 rounded-2xl animate-pulse bg-white/3 border border-white/5" />
                         ))}
                     </div>
                 ) : filtered.length === 0 ? (
                     <div className="text-center py-24">
-                        <p className="text-5xl mb-4">🛸</p>
-                        <p className="font-mono text-white/30">NO MISSIONS FOUND</p>
+                        <p className="text-4xl mb-3">📚</p>
+                        <p className="text-white/25 text-sm">No lessons found.</p>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         {filtered.map(lesson => (
-                            <MissionCard key={lesson._id} lesson={lesson} onOpen={setSelectedLesson} />
+                            <LessonCard key={lesson._id} lesson={lesson} onOpen={setSelectedLesson} />
                         ))}
                     </div>
                 )}
@@ -334,17 +275,12 @@ const MissionsPage = () => {
 
             {/* Modals */}
             {selectedLesson && !quizLesson && (
-                <LessonModal
-                    lesson={selectedLesson}
+                <LessonModal lesson={selectedLesson}
                     onClose={() => setSelectedLesson(null)}
-                    onStartQuiz={() => { setQuizLesson(selectedLesson); setSelectedLesson(null); }}
-                />
+                    onStartQuiz={() => { setQuizLesson(selectedLesson); setSelectedLesson(null); }} />
             )}
             {quizLesson && (
-                <QuizModal
-                    lesson={quizLesson}
-                    onClose={() => setQuizLesson(null)}
-                />
+                <QuizModal lesson={quizLesson} onClose={() => setQuizLesson(null)} />
             )}
         </div>
     );

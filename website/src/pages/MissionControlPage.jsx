@@ -1,23 +1,21 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import Layout from '../components/Layout';
 import { getAllLessons, createLesson, deleteLesson, getQuizForLesson, createQuiz, deleteQuiz } from '../api/missionService';
 import { showToast } from '../utils/toast';
 
-// ─── Quiz Builder ─────────────────────────────────────────────────────────────
 const EMPTY_QUESTION = () => ({ questionText: '', options: ['', '', '', ''], correctAns: 0 });
 const EMPTY_QUIZ = () => Array.from({ length: 5 }, EMPTY_QUESTION);
 
+// ─── Quiz Builder ─────────────────────────────────────────────────────────────
 const QuizBuilder = ({ lessonId, existingQuiz, onDone }) => {
     const [questions, setQuestions] = useState(existingQuiz ? existingQuiz.questions : EMPTY_QUIZ());
     const [saving, setSaving] = useState(false);
     const [deleting, setDeleting] = useState(false);
 
-    const updateQ = (qi, field, value) => {
-        setQuestions(prev => {
-            const next = prev.map((q, i) => i === qi ? { ...q, [field]: value } : q);
-            return next;
-        });
-    };
-    const updateOpt = (qi, oi, value) => {
+    const updateQ = (qi, field, value) =>
+        setQuestions(prev => prev.map((q, i) => i === qi ? { ...q, [field]: value } : q));
+
+    const updateOpt = (qi, oi, value) =>
         setQuestions(prev => {
             const next = [...prev];
             const opts = [...next[qi].options];
@@ -25,24 +23,21 @@ const QuizBuilder = ({ lessonId, existingQuiz, onDone }) => {
             next[qi] = { ...next[qi], options: opts };
             return next;
         });
-    };
 
     const handleSave = async () => {
         for (let i = 0; i < questions.length; i++) {
-            const q = questions[i];
-            if (!q.questionText.trim()) { showToast.alert(`Q${i + 1}: Enter question text.`); return; }
-            if (q.options.some(o => !o.trim())) { showToast.alert(`Q${i + 1}: Fill all 4 options.`); return; }
+            if (!questions[i].questionText.trim()) { showToast.alert(`Q${i + 1}: Enter question text.`); return; }
+            if (questions[i].options.some(o => !o.trim())) { showToast.alert(`Q${i + 1}: Fill all 4 options.`); return; }
         }
         setSaving(true);
         try {
             await createQuiz({ lessonId, questions });
-            showToast.success('Quiz uploaded successfully!');
+            showToast.success('Quiz created successfully!');
             onDone();
         } catch { } finally { setSaving(false); }
     };
 
     const handleDelete = async () => {
-        if (!existingQuiz) return;
         setDeleting(true);
         try {
             await deleteQuiz(existingQuiz._id);
@@ -51,15 +46,16 @@ const QuizBuilder = ({ lessonId, existingQuiz, onDone }) => {
         } catch { } finally { setDeleting(false); }
     };
 
+    const inputCls = "w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-white/20 outline-none focus:border-violet-500 transition-all";
+
     return (
         <div className="mt-4 space-y-4">
             {questions.map((q, qi) => (
-                <div key={qi} className="p-4 rounded-xl border" style={{ borderColor: 'rgba(178,34,34,0.3)', background: 'rgba(178,34,34,0.04)' }}>
-                    <p className="text-xs font-mono mb-2" style={{ color: '#FFD700' }}>QUESTION {qi + 1}</p>
+                <div key={qi} className="p-4 rounded-xl border border-white/8 bg-white/2">
+                    <p className="text-xs text-white/40 mb-2">Question {qi + 1}</p>
                     <input
-                        className="w-full bg-transparent border rounded-lg px-3 py-2 text-sm text-white outline-none mb-3"
-                        style={{ borderColor: 'rgba(255,255,255,0.12)' }}
-                        placeholder="Enter question text…"
+                        className={inputCls + ' mb-3 text-sm'}
+                        placeholder="Question text…"
                         value={q.questionText}
                         onChange={e => updateQ(qi, 'questionText', e.target.value)}
                         disabled={!!existingQuiz}
@@ -69,13 +65,15 @@ const QuizBuilder = ({ lessonId, existingQuiz, onDone }) => {
                             <div key={oi} className="flex items-center gap-2">
                                 <button
                                     onClick={() => !existingQuiz && updateQ(qi, 'correctAns', oi)}
-                                    className="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0"
-                                    style={{ borderColor: q.correctAns === oi ? '#FFD700' : 'rgba(255,255,255,0.2)', background: q.correctAns === oi ? '#FFD700' : 'transparent' }}
                                     disabled={!!existingQuiz}
+                                    className="w-4 h-4 rounded-full border-2 shrink-0"
+                                    style={{
+                                        borderColor: q.correctAns === oi ? '#8b5cf6' : 'rgba(255,255,255,0.2)',
+                                        background: q.correctAns === oi ? '#8b5cf6' : 'transparent'
+                                    }}
                                 />
                                 <input
-                                    className="flex-1 bg-transparent border rounded-lg px-3 py-1.5 text-xs text-white outline-none"
-                                    style={{ borderColor: 'rgba(255,255,255,0.1)' }}
+                                    className={inputCls}
                                     placeholder={`Option ${['A', 'B', 'C', 'D'][oi]}`}
                                     value={opt}
                                     onChange={e => updateOpt(qi, oi, e.target.value)}
@@ -86,18 +84,16 @@ const QuizBuilder = ({ lessonId, existingQuiz, onDone }) => {
                     </div>
                 </div>
             ))}
-            <div className="flex gap-3">
+            <div>
                 {!existingQuiz ? (
                     <button onClick={handleSave} disabled={saving}
-                        className="flex-1 py-3 rounded-xl font-bold text-sm cursor-pointer disabled:opacity-50"
-                        style={{ background: '#B22222', color: '#FFD700' }}>
-                        {saving ? 'Uploading…' : '▶  UPLOAD QUIZ'}
+                        className="w-full py-2.5 rounded-xl text-sm font-semibold cursor-pointer disabled:opacity-50 bg-gradient-to-r from-violet-600 to-purple-600 text-white transition-all">
+                        {saving ? 'Saving quiz…' : 'Save Quiz'}
                     </button>
                 ) : (
                     <button onClick={handleDelete} disabled={deleting}
-                        className="flex-1 py-3 rounded-xl font-bold text-sm cursor-pointer disabled:opacity-50 border"
-                        style={{ borderColor: '#B22222', color: '#B22222' }}>
-                        {deleting ? 'Deleting…' : '✕  DELETE QUIZ'}
+                        className="w-full py-2.5 rounded-xl text-sm font-semibold cursor-pointer disabled:opacity-50 border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-all">
+                        {deleting ? 'Deleting…' : 'Delete Quiz'}
                     </button>
                 )}
             </div>
@@ -118,62 +114,56 @@ const LessonCard = ({ lesson, onDelete, onRefresh }) => {
         try {
             const res = await getQuizForLesson(lesson._id);
             setQuiz(res.data);
-        } catch {
-            setQuiz(undefined);
-        } finally { setLoadingQuiz(false); }
+        } catch { setQuiz(undefined); }
+        finally { setLoadingQuiz(false); }
     };
 
-    const toggle = () => {
-        if (!expanded) loadQuiz();
-        setExpanded(p => !p);
-    };
+    const toggle = () => { if (!expanded) loadQuiz(); setExpanded(p => !p); };
 
     const handleDelete = async () => {
         setDeleting(true);
         try {
             await deleteLesson(lesson._id);
-            showToast.success('Mission deleted.');
+            showToast.success('Lesson deleted.');
             onDelete(lesson._id);
         } catch { } finally { setDeleting(false); }
     };
 
     return (
-        <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'rgba(178,34,34,0.3)', background: '#0a0f1e' }}>
+        <div className="glass-card border border-white/10 rounded-2xl overflow-hidden">
             <div className="p-5 flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-2 flex-wrap">
-                        <span className="text-xs font-mono px-2 py-0.5 rounded"
-                            style={{ background: 'rgba(178,34,34,0.15)', color: '#FFD700', border: '1px solid rgba(178,34,34,0.3)' }}>
+                    <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                        <span className="text-xs px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/20">
                             {lesson.category}
                         </span>
                         {lesson.isActive && (
-                            <span className="text-xs font-mono flex items-center gap-1" style={{ color: '#B22222' }}>
-                                <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-pulse" />LIVE
+                            <span className="text-xs flex items-center gap-1 text-emerald-400">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />Live
                             </span>
                         )}
                     </div>
-                    <h3 className="text-white font-bold">{lesson.title}</h3>
-                    <p className="text-white/40 text-xs mt-1 line-clamp-2">{lesson.content?.slice(0, 100)}…</p>
+                    <h3 className="font-semibold text-white text-sm">{lesson.title}</h3>
+                    <p className="text-white/35 text-xs mt-1 line-clamp-2">{lesson.content?.slice(0, 120)}…</p>
                 </div>
                 <div className="flex gap-2 shrink-0">
                     <button onClick={toggle}
-                        className="text-xs px-3 py-1.5 rounded-lg cursor-pointer border transition-colors"
-                        style={{ borderColor: 'rgba(255,215,0,0.3)', color: '#FFD700' }}>
-                        {expanded ? 'COLLAPSE' : 'QUIZ'}
+                        className="text-xs px-3 py-1.5 rounded-lg cursor-pointer border border-white/10 text-white/50 hover:text-white hover:border-white/20 transition-colors">
+                        {expanded ? 'Close' : 'Quiz'}
                     </button>
                     <button onClick={handleDelete} disabled={deleting}
-                        className="text-xs px-3 py-1.5 rounded-lg cursor-pointer border transition-colors disabled:opacity-40"
-                        style={{ borderColor: 'rgba(178,34,34,0.4)', color: '#B22222' }}>
-                        {deleting ? '…' : 'DEL'}
+                        className="text-xs px-3 py-1.5 rounded-lg cursor-pointer border border-red-500/20 text-red-400/60 hover:text-red-400 hover:border-red-500/40 disabled:opacity-40 transition-colors">
+                        {deleting ? '…' : 'Del'}
                     </button>
                 </div>
             </div>
             {expanded && (
-                <div className="px-5 pb-5 border-t" style={{ borderColor: 'rgba(178,34,34,0.15)' }}>
+                <div className="px-5 pb-5 border-t border-white/8">
                     {loadingQuiz ? (
-                        <p className="text-white/30 text-xs py-4 font-mono">LOADING QUIZ DATA…</p>
+                        <p className="text-white/30 text-xs py-4">Loading quiz…</p>
                     ) : (
-                        <QuizBuilder lessonId={lesson._id} existingQuiz={quiz || null} onDone={() => { setQuiz(null); loadQuiz(); onRefresh(); }} />
+                        <QuizBuilder lessonId={lesson._id} existingQuiz={quiz || null}
+                            onDone={() => { setQuiz(null); loadQuiz(); onRefresh(); }} />
                     )}
                 </div>
             )}
@@ -189,8 +179,6 @@ const MissionControlPage = () => {
     const [creating, setCreating] = useState(false);
     const [showForm, setShowForm] = useState(false);
 
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-
     const load = useCallback(async () => {
         try {
             const res = await getAllLessons();
@@ -202,7 +190,7 @@ const MissionControlPage = () => {
 
     const handleCreate = async (e) => {
         e.preventDefault();
-        if (!form.title.trim() || !form.content.trim() || !form.category.trim()) {
+        if (!form.title || !form.content || !form.category) {
             showToast.alert('All fields are required.'); return;
         }
         setCreating(true);
@@ -211,126 +199,75 @@ const MissionControlPage = () => {
             setLessons(prev => [res.data, ...prev]);
             setForm({ title: '', content: '', category: '' });
             setShowForm(false);
-            showToast.success('Mission deployed successfully!');
+            showToast.success('Lesson created!');
         } catch { } finally { setCreating(false); }
     };
 
-    return (
-        <div className="min-h-screen" style={{ background: '#030712', color: 'white' }}>
-            {/* Top Bar */}
-            <div className="border-b px-6 py-4 flex items-center justify-between"
-                style={{ borderColor: 'rgba(178,34,34,0.3)', background: 'rgba(10,15,30,0.9)', backdropFilter: 'blur(8px)' }}>
-                <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg flex items-center justify-center"
-                        style={{ background: '#B22222', boxShadow: '0 0 12px rgba(178,34,34,0.5)' }}>
-                        <span style={{ color: '#FFD700' }} className="font-black text-sm">M</span>
-                    </div>
-                    <div>
-                        <p className="text-sm font-bold text-white">MISSION CONTROL</p>
-                        <p className="text-xs font-mono" style={{ color: '#B22222' }}>Teacher Dashboard</p>
-                    </div>
-                </div>
-                <div className="flex items-center gap-3">
-                    <span className="text-xs font-mono text-white/30 hidden sm:block">
-                        {user.name?.toUpperCase()}
-                    </span>
-                    <button onClick={() => setShowForm(p => !p)}
-                        className="text-xs px-4 py-2 rounded-lg cursor-pointer font-bold"
-                        style={{ background: '#B22222', color: '#FFD700' }}>
-                        {showForm ? '✕ CANCEL' : '+ NEW MISSION'}
-                    </button>
-                    <button onClick={() => { localStorage.clear(); window.location.replace('/login'); }}
-                        className="text-xs px-3 py-2 rounded-lg cursor-pointer border"
-                        style={{ borderColor: 'rgba(178,34,34,0.4)', color: '#B22222' }}>
-                        LOGOUT
-                    </button>
-                </div>
-            </div>
+    const inputCls = "w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-white/20 outline-none focus:border-emerald-500 transition-all";
 
-            <div className="max-w-4xl mx-auto px-6 py-8">
+    return (
+        <Layout>
+            <div className="max-w-4xl mx-auto px-6 py-10">
+                {/* Header */}
+                <div className="flex items-center justify-between mb-8">
+                    <div>
+                        <h1 className="text-2xl font-bold text-white">Mission Control</h1>
+                        <p className="text-white/40 text-sm mt-1">Deploy lessons and build quizzes for students.</p>
+                    </div>
+                    <button onClick={() => setShowForm(p => !p)}
+                        className="text-sm px-4 py-2 rounded-xl cursor-pointer font-semibold bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-500 hover:to-teal-500 transition-all">
+                        {showForm ? '✕ Cancel' : '+ New Lesson'}
+                    </button>
+                </div>
+
                 {/* Create Form */}
                 {showForm && (
                     <form onSubmit={handleCreate}
-                        className="mb-8 p-6 rounded-2xl border"
-                        style={{ borderColor: '#FFD700', background: 'rgba(255,215,0,0.03)', boxShadow: '0 0 30px rgba(255,215,0,0.05)' }}>
-                        <p className="text-xs font-mono mb-4" style={{ color: '#FFD700' }}>◉ DEPLOY NEW MISSION</p>
+                        className="glass-card border border-white/10 rounded-2xl p-6 mb-6">
+                        <h2 className="text-base font-semibold text-white mb-4">New Lesson</h2>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                            <input
-                                className="bg-transparent border rounded-xl px-4 py-3 text-sm text-white outline-none col-span-full"
-                                style={{ borderColor: 'rgba(178,34,34,0.4)' }}
-                                placeholder="Mission Title *"
-                                value={form.title}
-                                onChange={e => setForm(p => ({ ...p, title: e.target.value }))}
-                                required
-                            />
-                            <input
-                                className="bg-transparent border rounded-xl px-4 py-3 text-sm text-white outline-none"
-                                style={{ borderColor: 'rgba(178,34,34,0.4)' }}
-                                placeholder="Category (e.g. Math, Science) *"
-                                value={form.category}
-                                onChange={e => setForm(p => ({ ...p, category: e.target.value }))}
-                                required
-                            />
+                            <input className={inputCls} placeholder="Title *"
+                                value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))} required />
+                            <input className={inputCls} placeholder="Category (e.g. Math) *"
+                                value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))} required />
                         </div>
-                        <textarea
-                            className="w-full bg-transparent border rounded-xl px-4 py-3 text-sm text-white outline-none resize-none"
-                            style={{ borderColor: 'rgba(178,34,34,0.4)' }}
-                            placeholder="Mission content / lesson briefing text… *"
-                            rows={6}
-                            value={form.content}
-                            onChange={e => setForm(p => ({ ...p, content: e.target.value }))}
-                            required
-                        />
+                        <textarea className={`${inputCls} resize-none`} rows={5}
+                            placeholder="Lesson content… *"
+                            value={form.content} onChange={e => setForm(p => ({ ...p, content: e.target.value }))} required />
                         <button type="submit" disabled={creating}
-                            className="mt-4 w-full py-3 rounded-xl font-bold text-sm cursor-pointer disabled:opacity-50"
-                            style={{ background: 'linear-gradient(135deg,#B22222,#8B0000)', color: '#FFD700', border: '1px solid #FFD700' }}>
-                            {creating ? 'Deploying…' : '▶  DEPLOY MISSION'}
+                            className="mt-4 w-full py-3 rounded-xl font-semibold text-sm cursor-pointer disabled:opacity-50 bg-gradient-to-r from-emerald-600 to-teal-600 text-white transition-all">
+                            {creating ? 'Creating…' : 'Create Lesson'}
                         </button>
                     </form>
                 )}
 
-                {/* Header */}
-                <div className="flex items-center justify-between mb-6">
-                    <div>
-                        <h1 className="text-2xl font-black text-white">
-                            DEPLOYED <span style={{ color: '#FFD700' }}>MISSIONS</span>
-                        </h1>
-                        <p className="text-white/30 text-xs font-mono mt-0.5">{lessons.length} total</p>
-                    </div>
-                    <button onClick={load}
-                        className="text-xs px-3 py-1.5 rounded-lg cursor-pointer border"
-                        style={{ borderColor: 'rgba(255,215,0,0.3)', color: '#FFD700' }}>
-                        ↻ REFRESH
-                    </button>
+                {/* Lessons List */}
+                <div className="flex items-center justify-between mb-4">
+                    <p className="text-sm text-white/40">{lessons.length} lessons total</p>
+                    <button onClick={load} className="text-xs text-white/30 hover:text-white/60 cursor-pointer transition-colors">↻ Refresh</button>
                 </div>
 
-                {/* Lesson List */}
                 {loading ? (
                     <div className="space-y-4">
                         {[...Array(3)].map((_, i) => (
-                            <div key={i} className="h-24 rounded-xl animate-pulse"
-                                style={{ background: 'rgba(178,34,34,0.05)', border: '1px solid rgba(178,34,34,0.1)' }} />
+                            <div key={i} className="h-24 rounded-2xl animate-pulse bg-white/3 border border-white/5" />
                         ))}
                     </div>
                 ) : lessons.length === 0 ? (
-                    <div className="text-center py-20">
-                        <p className="text-4xl mb-3">📡</p>
-                        <p className="font-mono text-white/30 text-sm">NO MISSIONS DEPLOYED YET</p>
+                    <div className="glass-card border border-white/10 rounded-2xl p-12 text-center text-white/20 text-sm">
+                        No lessons yet. Create your first one above.
                     </div>
                 ) : (
                     <div className="space-y-4">
                         {lessons.map(lesson => (
-                            <LessonCard
-                                key={lesson._id}
-                                lesson={lesson}
+                            <LessonCard key={lesson._id} lesson={lesson}
                                 onDelete={id => setLessons(prev => prev.filter(l => l._id !== id))}
-                                onRefresh={load}
-                            />
+                                onRefresh={load} />
                         ))}
                     </div>
                 )}
             </div>
-        </div>
+        </Layout>
     );
 };
 

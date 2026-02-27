@@ -1,0 +1,209 @@
+================================================================
+  SYNCLEARN — FEATURE & CODE GUIDE
+  Last updated: February 2026
+================================================================
+
+STRUCTURE
+---------
+synclearn_mono_repo/
+  Server/    →  Express + MongoDB REST API      (port 5000)
+  client/    →  React + Vite  (Student Portal)  (port 5173)
+  website/   →  React + Vite  (Teacher/Admin)   (port 5174)
+
+
+================================================================
+BACKEND (Server/)
+================================================================
+
+TECH: Node.js, Express.js, MongoDB, Mongoose, JWT, BcryptJS
+
+--- ENVIRONMENT (Server/.env) ---
+  PORT=5000
+  MONGO_URL=mongodb://localhost:27017/synclearn
+  JWT_SECRET=your_secret
+  BASE_URL=/api/v1/
+
+--- ARCHITECTURE ---
+Every feature follows:  Route → Middleware → Controller → Service → Model
+
+  Route        — defines URL, attaches auth middleware, calls controller
+  Middleware   — authenticate (verify JWT) + authorizeRoles (check role)
+  Controller   — extracts req data, calls service, sends HTTP response
+  Service      — all business logic + DB queries
+  Model        — Mongoose schema
+
+--- UTILITIES ---
+  catchAsync.js      → wraps controller functions to auto-catch async errors
+  ResponseUtils.js   → serviceOk / serviceFail (service layer)
+                       successResponse / errorResponse (HTTP layer)
+  JwtUtils.js        → generateToken({ _id, role }) | verifyToken(token)
+  authMiddleware.js  → authenticate  — reads Bearer token, sets req.user
+                       authorizeRoles(...roles) — 403 if role not allowed
+
+--- MODELS ---
+  Admin        : name, email, password(hidden)
+  Teacher      : name, email, password(hidden), subject, classes[]
+  Student      : name, email, password(hidden), class, rollNumber, totalScore
+  Lesson       : title, content, category, teacherId→Teacher, isActive
+  Quiz         : lessonId→Lesson (unique), questions[5]
+                   question: questionText, options[4], correctAns(0-3 index)
+  QuizAttempt  : quizId, studentId, answers[], score
+  Announcement : title, message, adminId→Admin
+
+--- API ENDPOINTS ---
+
+AUTH (Public — no token needed)
+  POST  /api/v1/admin/register        { name, email, password }
+  POST  /api/v1/admin/login           { email, password }
+  POST  /api/v1/teacher/login         { email, password }
+  POST  /api/v1/student/login         { email, password }
+
+USER MANAGEMENT
+  POST  /api/v1/admin/add-teacher     { name, email, password, subject, classes[] }  [Admin]
+  POST  /api/v1/admin/add-student     { name, email, password, class, rollNumber }    [Admin]
+  POST  /api/v1/teacher/add-student   { name, email, password, class, rollNumber }    [Teacher]
+  GET   /api/v1/admin/teachers        returns all teachers (no passwords)             [Admin]
+  GET   /api/v1/admin/students        returns all students (no passwords)             [Admin]
+
+LESSONS
+  GET   /api/v1/lesson                all active lessons (teacherId populated)        [All]
+  GET   /api/v1/lesson/:id            single lesson                                   [All]
+  POST  /api/v1/lesson                { title, content, category }                    [Teacher/Admin]
+  PUT   /api/v1/lesson/:id            partial update (teacher owns or admin)          [Teacher/Admin]
+  DELETE /api/v1/lesson/:id           (teacher owns or admin)                         [Teacher/Admin]
+
+QUIZZES
+  GET   /api/v1/quiz/lesson/:lessonId  fetch quiz — correctAns STRIPPED for students  [All]
+  POST  /api/v1/quiz                   { lessonId, questions[5] }                     [Teacher/Admin]
+  POST  /api/v1/quiz/:id/submit        { answers: [0,2,1,3,0] } → { score, total }   [Student]
+  DELETE /api/v1/quiz/:id              (teacher owns or admin)                         [Teacher/Admin]
+
+ANNOUNCEMENTS
+  GET    /api/v1/announcement           all announcements                              [All]
+  POST   /api/v1/announcement           { title, message }                             [Admin]
+  DELETE /api/v1/announcement/:id                                                      [Admin]
+
+--- QUIZ SCORE LOGIC ---
+  1. Fetch quiz from DB
+  2. For each question: answers[i] === quiz.questions[i].correctAns → +1
+  3. Save QuizAttempt record
+  4. Student.totalScore += score  (via $inc)
+  5. Return { score, total: 5 }
+
+--- SECURITY ---
+  • correctAns stripped server-side for students (never sent to client)
+  • Passwords use select:false — never returned in any query by default
+  • Teacher ownership enforced in service layer for lesson + quiz mutations
+  • Admin can bypass ownership checks
+  • 401 auto-clears localStorage on frontend
+
+
+================================================================
+CLIENT APP (client/) — Student Portal
+================================================================
+
+ROUTES
+  /login      LoginPage        (public — redirects if already logged in)
+  /home       HomePage         (private)
+  /missions   MissionsPage     (private)
+
+KEY FILES
+  src/api/axiosClient.js
+    — baseURL from VITE_API_URL env var
+    — request interceptor: auto-attaches Authorization: Bearer <token>
+    — response interceptor:
+        401        → clear localStorage + redirect /login
+        no-response → toast "Cannot reach server"
+        other error → toast with server error message
+
+  src/api/authService.js
+    loginStudent(credentials)  → POST student/login
+                                  stores token + user in localStorage
+    logoutStudent()            → clear localStorage
+
+  src/api/missionService.js
+    getAllLessons()             → GET lesson
+    getLessonById(id)          → GET lesson/:id
+    getQuizForLesson(lessonId) → GET quiz/lesson/:id  (no correctAns)
+    submitQuiz(quizId, answers)→ POST quiz/:id/submit
+    getAnnouncements()         → GET announcement
+
+  src/constants/apiEndpoints.js
+    Single source of all API route strings. No URLs in components.
+
+  src/utils/toast.js
+    showToast.success(msg)
+    showToast.error(msg)
+    showToast.alert(msg)
+
+PAGES
+  LoginPage     — student login form, shows success toast, navigates to /home
+  HomePage      — placeholder dashboard
+  MissionsPage  — full student mission workflow:
+    • Announcements banner (latest 2 from admin)
+    • Lesson cards grid (search filter, active/inactive indicator)
+    • Lesson briefing modal (full content + teacher info)
+    • Quiz modal (5 questions, A/B/C/D option buttons)
+    • Score result screen (X/5 with progress bar + result message)
+
+
+================================================================
+WEBSITE APP (website/) — Teacher & Admin Portal
+================================================================
+
+ROUTES
+  /login          LoginPage            (public)
+  /home           HomePage             (private)
+  /missions       MissionControlPage   (private)
+  /announcements  AnnouncementsPage    (private)
+  /teachers       ManageTeachersPage   (private)
+  /students       ManageStudentsPage   (private)
+
+KEY FILES
+  src/api/authService.js
+    loginTeacher(credentials)  → POST teacher/login → store token+user
+    loginAdmin(credentials)    → POST admin/login   → store token+user
+    logoutUser()               → clear localStorage
+
+  src/api/missionService.js
+    Lesson: getAllLessons, getLessonById, createLesson, updateLesson, deleteLesson
+    Quiz:   getQuizForLesson, createQuiz, deleteQuiz
+    Announcement: getAnnouncements, createAnnouncement, deleteAnnouncement
+
+  src/api/userService.js
+    addTeacher(payload)         → POST admin/add-teacher
+    listTeachers()              → GET  admin/teachers
+    addStudent(payload, role)   → POST admin/add-student  OR  teacher/add-student
+    listStudents()              → GET  admin/students
+
+COMPONENTS
+  Layout.jsx    — collapsible sidebar with role-aware navigation
+                  Admin sees: Dashboard, Missions, Students, Teachers, Broadcasts
+                  Teacher sees: Dashboard, Missions, Students
+
+PAGES
+  LoginPage          — toggle Teacher/Admin, calls correct login service
+  HomePage           — quick-launch card grid (4 for admin, 2 for teacher)
+  MissionControlPage — create lesson form + lesson list
+                       expand a lesson → inline QuizBuilder (5 Qs, pick correct answer)
+  AnnouncementsPage  — create announcement form + list with Remove button
+  ManageTeachersPage — Add Teacher form + teacher roster table
+  ManageStudentsPage — Enroll Student form + student table with score column
+                       (table visible to admin only; teachers see form only)
+
+
+================================================================
+AUTH TOKEN FLOW (IMPORTANT)
+================================================================
+
+Server response shape for ALL endpoints:
+  { success: true, message: "...", data: { ...payload } }
+
+For login, data = { token, user }
+So on frontend: response.data.data.token  (NOT response.data.token)
+
+localStorage keys:
+  "token"  → JWT string
+  "user"   → JSON stringified { id, name, email, role, ... }
+
+================================================================
