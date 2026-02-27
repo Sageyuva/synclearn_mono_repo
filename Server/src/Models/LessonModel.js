@@ -1,0 +1,11 @@
+const mongoose = require("mongoose")
+
+const lessonSchema = new mongoose.Schema({
+    title: { type: String, required: true, trim: true },
+    content: { type: String, required: true },
+    category: { type: String, required: true, trim: true },
+    teacherId: { type: mongoose.Schema.Types.ObjectId, ref: "Teacher", required: true },
+    isActive: { type: Boolean, default: true },
+}, { timestamps: true })
+
+module.exports = mongoose.model("Lesson", lessonSchema)

@@ -3,39 +3,27 @@ import { API_ROUTES } from '../constants/apiEndpoints';
 
 /**
  * Auth Service — Student App
- * All authentication-related API calls for students.
  *
- * Rule: No axios imports in UI components — always use this service.
+ * Server response shape: { success, message, data: { token, user } }
+ * Axios gives us `response.data` = the full body above.
+ * So the token lives at `response.data.data.token`, destructured below.
  */
 
-/**
- * Login a student.
- * @param {{ email: string, password: string }} credentials
- * @returns {Promise<{ token: string, user: object }>}
- */
 export const loginStudent = async (credentials) => {
-    const { data } = await axiosClient.post(API_ROUTES.AUTH.LOGIN, credentials);
+    const response = await axiosClient.post(API_ROUTES.AUTH.LOGIN, credentials);
+    const { token, user } = response.data.data;   // ← unwrap the nested `data`
 
-    // Persist session
-    localStorage.setItem('token', data.token);
-    localStorage.setItem('user', JSON.stringify(data.user));
+    localStorage.setItem('token', token);
+    localStorage.setItem('user', JSON.stringify(user));
 
-    return data;
+    return response.data;
 };
 
-/**
- * Fetch logged-in student profile.
- * Token is auto-attached by the request interceptor.
- * @returns {Promise<object>}
- */
 export const getStudentProfile = async () => {
     const { data } = await axiosClient.get(API_ROUTES.STUDENTS.PROFILE);
     return data;
 };
 
-/**
- * Logout — clears client-side session.
- */
 export const logoutStudent = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');

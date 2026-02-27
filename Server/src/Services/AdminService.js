@@ -1,4 +1,6 @@
 const AdminModel = require("../Models/AdminModel")
+const TeacherModel = require("../Models/TeacherModel")
+const StudentModel = require("../Models/StudentModel")
 const { hashPassword, comparePassword } = require("../Utils/passwordUtils")
 const { generateToken } = require("../Utils/JwtUtils")
 const { serviceOk, serviceFail } = require("../Utils/ResponseUtils")
@@ -20,4 +22,16 @@ const loginAdmin = async (email, password) => {
     return serviceOk("Login successful", { token, user: { id: admin._id, name: admin.name, email: admin.email, role: "admin" } })
 }
 
-module.exports = { addAdmin, loginAdmin }
+// Get all teachers (list view, no passwords)
+const getAllTeachers = async () => {
+    const teachers = await TeacherModel.find().select("-password").sort({ createdAt: -1 })
+    return serviceOk("Teachers fetched", teachers)
+}
+
+// Get all students (list view, no passwords)
+const getAllStudents = async () => {
+    const students = await StudentModel.find().select("-password").sort({ createdAt: -1 })
+    return serviceOk("Students fetched", students)
+}
+
+module.exports = { addAdmin, loginAdmin, getAllTeachers, getAllStudents }

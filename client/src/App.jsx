@@ -5,6 +5,7 @@ import PublicRoute from './components/PublicRoute';
 import PrivateRoute from './components/PrivateRoute';
 import LoginPage from './pages/LoginPage';
 import HomePage from './pages/HomePage';
+import MissionsPage from './pages/MissionsPage';
 
 const App = () => {
   return (
@@ -30,6 +31,14 @@ const App = () => {
           element={
             <PrivateRoute>
               <HomePage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/missions"
+          element={
+            <PrivateRoute>
+              <MissionsPage />
             </PrivateRoute>
           }
         />

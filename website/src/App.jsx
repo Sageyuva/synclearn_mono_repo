@@ -5,36 +5,26 @@ import PublicRoute from './components/PublicRoute';
 import PrivateRoute from './components/PrivateRoute';
 import LoginPage from './pages/LoginPage';
 import HomePage from './pages/HomePage';
+import MissionControlPage from './pages/MissionControlPage';
+import AnnouncementsPage from './pages/AnnouncementsPage';
+import ManageTeachersPage from './pages/ManageTeachersPage';
+import ManageStudentsPage from './pages/ManageStudentsPage';
 
 const App = () => {
   return (
     <BrowserRouter>
       <Toaster position="top-right" />
       <Routes>
-        {/* Redirect root to /login */}
         <Route path="/" element={<Navigate to="/login" replace />} />
 
-        {/* Public routes — accessible only when NOT logged in */}
-        <Route
-          path="/login"
-          element={
-            <PublicRoute>
-              <LoginPage />
-            </PublicRoute>
-          }
-        />
+        <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
 
-        {/* Private routes — accessible only when logged in */}
-        <Route
-          path="/home"
-          element={
-            <PrivateRoute>
-              <HomePage />
-            </PrivateRoute>
-          }
-        />
+        <Route path="/home" element={<PrivateRoute><HomePage /></PrivateRoute>} />
+        <Route path="/missions" element={<PrivateRoute><MissionControlPage /></PrivateRoute>} />
+        <Route path="/announcements" element={<PrivateRoute><AnnouncementsPage /></PrivateRoute>} />
+        <Route path="/teachers" element={<PrivateRoute><ManageTeachersPage /></PrivateRoute>} />
+        <Route path="/students" element={<PrivateRoute><ManageStudentsPage /></PrivateRoute>} />
 
-        {/* Catch-all */}
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>
