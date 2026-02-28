@@ -37,13 +37,15 @@ Every feature follows:  Route → Middleware → Controller → Service → Mode
   ResponseUtils.js   → serviceOk / serviceFail (service layer)
                        successResponse / errorResponse (HTTP layer)
   JwtUtils.js        → generateToken({ _id, role }) | verifyToken(token)
+  passwordUtils.js   → hashPassword(plain) | comparePassword(plain, hash)
   authMiddleware.js  → authenticate  — reads Bearer token, sets req.user
                        authorizeRoles(...roles) — 403 if role not allowed
 
 --- MODELS ---
   Admin        : name, email, password(hidden)
   Teacher      : name, email, password(hidden), subject, classes[]
-  Student      : name, email, password(hidden), class, rollNumber, totalScore
+  Student      : name, email, password(hidden), class, rollNumber,
+                 totalScore (Number, default 0), timestamps
   Lesson       : title, content, category, teacherId→Teacher, isActive
   Quiz         : lessonId→Lesson (unique), questions[5]
                    question: questionText, options[4], correctAns(0-3 index)
@@ -90,6 +92,12 @@ ANNOUNCEMENTS
   4. Student.totalScore += score  (via $inc)
   5. Return { score, total: 5 }
 
+--- LOGIN RESPONSE SHAPE (ALL ROLES) ---
+  Student login returns full profile in the user object:
+    { token, user: { id, name, email, class, rollNumber, totalScore, role } }
+  Teacher/Admin login returns:
+    { token, user: { id, name, email, role } }
+
 --- SECURITY ---
   • correctAns stripped server-side for students (never sent to client)
   • Passwords use select:false — never returned in any query by default
@@ -103,9 +111,15 @@ CLIENT APP (client/) — Student Portal
 ================================================================
 
 ROUTES
-  /login      LoginPage        (public — redirects if already logged in)
+  /           → redirects to /login
+  /login      LoginPage        (public — redirects to /home if already logged in)
   /home       HomePage         (private)
   /missions   MissionsPage     (private)
+  *           → redirects to /login (catch-all)
+
+ROUTE GUARDS
+  PublicRoute.jsx  — redirects to /home if token exists in localStorage
+  PrivateRoute.jsx — redirects to /login if no token in localStorage
 
 KEY FILES
   src/api/axiosClient.js
@@ -117,19 +131,33 @@ KEY FILES
         other error → toast with server error message
 
   src/api/authService.js
-    loginStudent(credentials)  → POST student/login
-                                  stores token + user in localStorage
-    logoutStudent()            → clear localStorage
+    loginStudent(credentials)    → POST student/login
+                                    stores token + full user object in localStorage
+                                    (includes class, rollNumber, totalScore)
+    getStudentProfile()          → GET student/profile  (authenticated)
+    logoutStudent()              → removes 'token' and 'user' from localStorage
 
   src/api/missionService.js
-    getAllLessons()             → GET lesson
-    getLessonById(id)          → GET lesson/:id
-    getQuizForLesson(lessonId) → GET quiz/lesson/:id  (no correctAns)
-    submitQuiz(quizId, answers)→ POST quiz/:id/submit
-    getAnnouncements()         → GET announcement
+    getAllLessons()               → GET lesson
+    getLessonById(id)            → GET lesson/:id
+    getQuizForLesson(lessonId)   → GET quiz/lesson/:id  (no correctAns)
+    submitQuiz(quizId, answers)  → POST quiz/:id/submit
+    getAnnouncements()           → GET announcement
 
   src/constants/apiEndpoints.js
     Single source of all API route strings. No URLs in components.
+    Namespaces: AUTH, STUDENTS, LESSONS, QUIZ, ANNOUNCEMENTS
+    Frozen with Object.freeze() to prevent accidental mutation.
+
+    AUTH.LOGIN            → 'student/login'
+    STUDENTS.PROFILE      → 'student/profile'
+    STUDENTS.ALL          → 'student'
+    LESSONS.BASE          → 'lesson'
+    LESSONS.BY_ID(id)     → 'lesson/:id'
+    QUIZ.BY_LESSON(id)    → 'quiz/lesson/:id'
+    QUIZ.BASE             → 'quiz'
+    QUIZ.SUBMIT(id)       → 'quiz/:id/submit'
+    ANNOUNCEMENTS.BASE    → 'announcement'
 
   src/utils/toast.js
     showToast.success(msg)
@@ -137,14 +165,43 @@ KEY FILES
     showToast.alert(msg)
 
 PAGES
-  LoginPage     — student login form, shows success toast, navigates to /home
-  HomePage      — placeholder dashboard
-  MissionsPage  — full student mission workflow:
-    • Announcements banner (latest 2 from admin)
-    • Lesson cards grid (search filter, active/inactive indicator)
-    • Lesson briefing modal (full content + teacher info)
-    • Quiz modal (5 questions, A/B/C/D option buttons)
-    • Score result screen (X/5 with progress bar + result message)
+  LoginPage
+    — Student login form
+    — Shows success toast on login, navigates to /home
+    — On error: error toast from axiosClient interceptor
+
+  HomePage
+    — Sticky top bar with SyncLearn logo and Logout button
+    — Welcome greeting: "Welcome back, {firstName}! 👋"
+    — BroadcastFeed component (live list of ALL admin announcements)
+        • Scrollable list (max-h-72), shows title + message + formatted date
+        • Animated violet ping dot to indicate live feed
+        • Badge with count of active announcements
+        • Skeleton loading state while fetching
+    — Quick nav card: "My Missions" → /missions
+    — Student info card: shows name, email, class (from localStorage user)
+      and totalScore displayed in large emerald text
+
+  MissionsPage  — full student mission workflow (sub-components below):
+    • Sticky top bar with ← Home back button and student name
+    • Announcements banner strip (latest 2 from admin, violet highlighted)
+    • Search bar (filters by title or category)
+    • Lesson count ("X available") updates with search filter
+    • Skeleton loading (6 placeholder cards in grid)
+    • Lesson card grid (1/2/3 columns responsive):
+        LessonCard — category badge, "Live" pulse dot if isActive,
+                     title, content preview (120 chars), teacher name+subject,
+                     animated → arrow on hover
+    • LessonModal (z-40) — full content view:
+        category badge, title, teacher + subject attribution,
+        full content (whitespace-pre-wrap), "Start Quiz →" button
+    • QuizModal (z-50) — quiz workflow:
+        loading spinner → question list → result screen
+        5 questions, A/B/C/D option buttons (violet highlight when selected)
+        Submit Assessment button (disabled until all answered)
+        Result screen: X/5 score, gradient progress bar, emoji message
+        (🏆 Perfect / ✅ Well done / 📚 Keep studying)
+    • Uses Promise.all to fetch lessons + announcements in parallel on mount
 
 
 ================================================================
@@ -187,7 +244,9 @@ PAGES
   MissionControlPage — create lesson form + lesson list
                        expand a lesson → inline QuizBuilder (5 Qs, pick correct answer)
   AnnouncementsPage  — create announcement form + list with Remove button
-  ManageTeachersPage — Add Teacher form + teacher roster table
+  ManageTeachersPage — Add Teacher form (name, email, password, subject, classes CSV)
+                       Teacher roster table: Name | Email | Subject | Classes | Joined
+                       (Admin only — form submits classes as comma-split array)
   ManageStudentsPage — Enroll Student form + student table with score column
                        (table visible to admin only; teachers see form only)
 
@@ -204,6 +263,9 @@ So on frontend: response.data.data.token  (NOT response.data.token)
 
 localStorage keys:
   "token"  → JWT string
-  "user"   → JSON stringified { id, name, email, role, ... }
+  "user"   → JSON stringified user object
+               Student: { id, name, email, class, rollNumber, totalScore, role }
+               Teacher: { id, name, email, role }
+               Admin:   { id, name, email, role }
 
 ================================================================

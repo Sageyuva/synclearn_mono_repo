@@ -101,13 +101,12 @@ const ManageStudentsPage = () => {
     const isAdmin = user.role === 'admin';
 
     const load = useCallback(async () => {
-        if (!isAdmin) { setLoadingList(false); return; }
         setLoadingList(true);
         try {
             const res = await listStudents();
             setStudents(res.data || []);
         } catch { } finally { setLoadingList(false); }
-    }, [isAdmin]);
+    }, []);
 
     useEffect(() => { load(); }, [load]);
 
@@ -119,13 +118,7 @@ const ManageStudentsPage = () => {
                     <p className="text-white/40 text-sm mt-1">Enroll students and view the full class roster.</p>
                 </div>
                 <AddStudentForm onSuccess={load} />
-                {isAdmin ? (
-                    <StudentTable students={students} loading={loadingList} />
-                ) : (
-                    <div className="glass-card border border-white/10 rounded-2xl p-6 text-center text-white/30 text-sm">
-                        Student list is visible to Admins only.
-                    </div>
-                )}
+                <StudentTable students={students} loading={loadingList} />
             </div>
         </Layout>
     );

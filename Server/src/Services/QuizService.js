@@ -1,6 +1,7 @@
 const QuizModel = require("../Models/QuizModel")
 const QuizAttemptModel = require("../Models/QuizAttemptModel")
 const StudentModel = require("../Models/StudentModel")
+const { getRank, BONUS_XP } = require("../Utils/rankUtils")
 const { serviceOk, serviceFail } = require("../Utils/ResponseUtils")
 
 // Create quiz for a lesson
@@ -34,7 +35,7 @@ const getQuizByLesson = async (lessonId, role) => {
     return serviceOk("Quiz fetched", quiz)
 }
 
-// Submit quiz attempt — auto-calculate score and update student totalScore
+// Submit quiz attempt — calculates score, awards XP, handles quest completion
 const submitQuiz = async (quizId, studentId, answers) => {
     const quiz = await QuizModel.findById(quizId)
     if (!quiz) return serviceFail(404, "Quiz not found")
@@ -42,18 +43,55 @@ const submitQuiz = async (quizId, studentId, answers) => {
         return serviceFail(400, "Please answer all questions before submitting")
     }
 
-    // Calculate score
+    // ── 1. Calculate raw score ──────────────────────────────────────────────────
     const score = quiz.questions.reduce((acc, q, i) => {
         return acc + (answers[i] === q.correctAns ? 1 : 0)
     }, 0)
 
-    // Save attempt
+    // ── 2. Save attempt ─────────────────────────────────────────────────────────
     const attempt = await QuizAttemptModel.create({ quizId, studentId, answers, score })
 
-    // Increment student totalScore
-    await StudentModel.findByIdAndUpdate(studentId, { $inc: { totalScore: score } })
+    // ── 3. Quest completion — use $addToSet to safely prevent duplicates ────────
+    const PASS_THRESHOLD = 3
+    let isFirstCompletion = false
+    let bonusXP = 0
 
-    return serviceOk("Quiz submitted", { score, total: quiz.questions.length, attemptId: attempt._id }, 201)
+    if (score >= PASS_THRESHOLD) {
+        // Peek at CURRENT completedLessons before the update
+        const before = await StudentModel.findById(studentId).select("completedLessons")
+        const alreadyCompleted = before.completedLessons
+            .map(id => id.toString())
+            .includes(quiz.lessonId.toString())
+
+        isFirstCompletion = !alreadyCompleted
+        bonusXP = isFirstCompletion ? BONUS_XP : 0
+
+        // $addToSet is idempotent — safe even if re-submitted
+        await StudentModel.findByIdAndUpdate(studentId, {
+            $addToSet: { completedLessons: quiz.lessonId },
+            $inc: { totalScore: score + bonusXP },
+        })
+    } else {
+        // Failed attempt — still credit the raw score, no lesson completion
+        await StudentModel.findByIdAndUpdate(studentId, {
+            $inc: { totalScore: score },
+        })
+    }
+
+    // ── 4. Fetch updated student to return fresh state ──────────────────────────
+    const updated = await StudentModel.findById(studentId)
+    const rank = getRank(updated.totalScore)
+
+    return serviceOk("Quiz submitted", {
+        score,
+        total: quiz.questions.length,
+        bonusXP,
+        isFirstCompletion,
+        totalScore: updated.totalScore,
+        completedLessons: updated.completedLessons.map(id => id.toString()),
+        rank,
+        attemptId: attempt._id,
+    }, 201)
 }
 
 // Delete quiz (teacher owner or admin)

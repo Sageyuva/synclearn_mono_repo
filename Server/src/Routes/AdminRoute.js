@@ -11,8 +11,8 @@ router.post("/login", login)
 router.post("/add-teacher", authenticate, authorizeRoles("admin"), createTeacher)
 router.post("/add-student", authenticate, authorizeRoles("admin"), createStudent)
 
-// Admin only — list
-router.get("/teachers", authenticate, authorizeRoles("admin"), listTeachers)
-router.get("/students", authenticate, authorizeRoles("admin"), listStudents)
+// Admin + Teacher — list
+router.get("/teachers", authenticate, authorizeRoles("admin", "teacher"), listTeachers)
+router.get("/students", authenticate, authorizeRoles("admin", "teacher"), listStudents)
 
 module.exports = router

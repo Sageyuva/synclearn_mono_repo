@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAnnouncements } from '../api/missionService';
+import { getRank } from '../utils/rankUtils';
 
 // ─── Broadcast Feed ────────────────────────────────────────────────────────────
 const BroadcastFeed = () => {
@@ -128,15 +129,25 @@ const HomePage = () => {
                 </div>
 
                 {/* Student info */}
-                <div className="glass-card border border-white/10 rounded-2xl px-5 py-4 flex items-center justify-between">
-                    <div>
-                        <p className="text-white/40 text-xs mb-0.5">Logged in as</p>
-                        <p className="font-medium text-sm text-white">{user.name || user.email}</p>
-                        <p className="text-white/30 text-xs">{user.email} · Class {user.class}</p>
-                    </div>
-                    <div className="text-right">
-                        <p className="text-white/40 text-xs mb-0.5">Total Score</p>
-                        <p className="text-2xl font-black text-emerald-400">{user.totalScore ?? 0}</p>
+                <div className="glass-card border border-white/10 rounded-2xl px-5 py-4">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-white/40 text-xs mb-0.5">Logged in as</p>
+                            <p className="font-medium text-sm text-white">{user.name || user.email}</p>
+                            <p className="text-white/30 text-xs">{user.email} · Class {user.class}</p>
+                        </div>
+                        <div className="text-right">
+                            <p className="text-white/40 text-xs mb-1">Total XP</p>
+                            <p className="text-2xl font-black text-emerald-400">{user.totalScore ?? 0}</p>
+                            {(() => {
+                                const rank = user.rank || getRank(user.totalScore ?? 0);
+                                return (
+                                    <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-semibold mt-1 ${rank.bg} ${rank.color}`}>
+                                        {rank.emoji} {rank.label}
+                                    </span>
+                                );
+                            })()}
+                        </div>
                     </div>
                 </div>
             </div>

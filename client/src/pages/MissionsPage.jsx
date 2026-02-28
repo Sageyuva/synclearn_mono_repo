@@ -1,15 +1,23 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import confetti from 'canvas-confetti';
 import { getAllLessons, getQuizForLesson, submitQuiz, getAnnouncements } from '../api/missionService';
 import { showToast } from '../utils/toast';
 
+// ─── Helpers ───────────────────────────────────────────────────────────────────
+const fireConfetti = () => {
+    confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 }, colors: ['#8b5cf6', '#10b981', '#f59e0b', '#fff'] });
+    setTimeout(() =>
+        confetti({ particleCount: 60, spread: 120, origin: { y: 0.5 }, colors: ['#8b5cf6', '#10b981'] }), 300);
+};
+
 // ─── Quiz Modal ────────────────────────────────────────────────────────────────
-const QuizModal = ({ lesson, onClose }) => {
+const QuizModal = ({ lesson, onClose, onQuestComplete }) => {
     const [quiz, setQuiz] = useState(null);
     const [answers, setAnswers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
-    const [result, setResult] = useState(null);
+    const [result, setResult] = useState(null);   // { score, total, bonusXP, isFirstCompletion, rank }
 
     useEffect(() => {
         getQuizForLesson(lesson._id)
@@ -32,11 +40,32 @@ const QuizModal = ({ lesson, onClose }) => {
         try {
             const res = await submitQuiz(quiz._id, answers);
             setResult(res.data);
-            showToast.success(`Score: ${res.data.score}/${res.data.total}`);
+            if (res.data.score >= 3) showToast.success(`Score: ${res.data.score}/${res.data.total} — Quest complete!`);
+            else showToast.error(`Score: ${res.data.score}/${res.data.total} — Try again!`);
         } catch { } finally { setSubmitting(false); }
     };
 
+    const handleClaim = () => {
+
+        fireConfetti();
+        // Sync completedLessons & totalScore from the submit response directly into localStorage
+        if (result?.completedLessons) {
+            try {
+                const stored = JSON.parse(localStorage.getItem('user') || '{}');
+                const updated = {
+                    ...stored,
+                    completedLessons: result.completedLessons,
+                    totalScore: result.totalScore,
+                    rank: result.rank,
+                };
+                localStorage.setItem('user', JSON.stringify(updated));
+            } catch { }
+        }
+        onQuestComplete();
+    };
+
     const OPTS = ['A', 'B', 'C', 'D'];
+    const passed = result && result.score >= 3;
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -54,24 +83,53 @@ const QuizModal = ({ lesson, onClose }) => {
 
                 <div className="p-6">
                     {result ? (
-                        /* ── Result screen ── */
-                        <div className="text-center py-10">
-                            <div className="text-6xl font-black bg-gradient-to-r from-emerald-400 to-violet-500 bg-clip-text text-transparent mb-2">
+                        /* ── Result Screen ── */
+                        <div className="text-center py-8">
+                            {/* Score */}
+                            <div className={`text-6xl font-black bg-gradient-to-r ${passed ? 'from-emerald-400 to-violet-500' : 'from-red-400 to-orange-500'} bg-clip-text text-transparent mb-2`}>
                                 {result.score}/{result.total}
                             </div>
-                            <p className="text-white/50 text-sm mb-6">Assessment complete</p>
-                            <div className="w-full rounded-full h-2.5 bg-white/5 mb-6">
-                                <div className="h-2.5 rounded-full bg-gradient-to-r from-emerald-500 to-violet-500 transition-all duration-1000"
+                            <p className="text-white/50 text-sm mb-5">Assessment complete</p>
+
+                            {/* Progress bar */}
+                            <div className="w-full rounded-full h-2.5 bg-white/5 mb-5">
+                                <div className={`h-2.5 rounded-full transition-all duration-1000 bg-gradient-to-r ${passed ? 'from-emerald-500 to-violet-500' : 'from-red-500 to-orange-500'}`}
                                     style={{ width: `${(result.score / result.total) * 100}%` }} />
                             </div>
+
+                            {/* Bonus XP banner — only on first completion */}
+                            {result.isFirstCompletion && (
+                                <div className="mb-5 inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-yellow-500/30 bg-yellow-500/10 text-yellow-300 text-sm font-semibold">
+                                    🎯 +{result.bonusXP} Bonus XP — First Completion!
+                                </div>
+                            )}
+
+                            {/* Result message */}
                             <p className="text-sm text-white/40 mb-8">
                                 {result.score === result.total ? '🏆 Perfect! Outstanding work.' :
-                                    result.score >= 3 ? '✅ Well done! Mission accomplished.' : '📚 Keep studying. You can do better!'}
+                                    passed ? '✅ Well done! Mission accomplished.' : '📚 Keep studying. You can do better!'}
                             </p>
-                            <button onClick={onClose}
-                                className="px-8 py-3 rounded-xl font-semibold cursor-pointer bg-gradient-to-r from-emerald-600 to-violet-600 text-white text-sm">
-                                Close
-                            </button>
+
+                            {/* Rank display after submission */}
+                            {result.rank && (
+                                <p className="text-xs text-white/30 mb-6">
+                                    Current Rank: <span className="font-semibold text-white/60">{result.rank.emoji} {result.rank.label}</span>
+                                    {' · '}{result.totalScore} XP
+                                </p>
+                            )}
+
+                            {/* CTA buttons */}
+                            {passed ? (
+                                <button onClick={handleClaim}
+                                    className="px-8 py-3 rounded-xl font-semibold cursor-pointer bg-gradient-to-r from-yellow-500 to-emerald-500 hover:from-yellow-400 hover:to-emerald-400 text-white text-sm transition-all shadow-lg shadow-emerald-500/20">
+                                    🎖️ Claim Rewards &amp; Finish Mission
+                                </button>
+                            ) : (
+                                <button onClick={onClose}
+                                    className="px-8 py-3 rounded-xl font-semibold cursor-pointer bg-white/8 border border-white/10 hover:bg-white/12 text-white text-sm transition-all">
+                                    Close — Try Again Later
+                                </button>
+                            )}
                         </div>
                     ) : loading ? (
                         <div className="flex justify-center py-16">
@@ -92,8 +150,8 @@ const QuizModal = ({ lesson, onClose }) => {
                                             return (
                                                 <button key={oi} onClick={() => handleSelect(qi, oi)}
                                                     className={`text-left px-4 py-2.5 rounded-lg text-sm border cursor-pointer transition-all ${selected
-                                                            ? 'border-violet-500 bg-violet-500/15 text-violet-300'
-                                                            : 'border-white/8 bg-white/2 text-white/60 hover:border-white/20 hover:text-white/80'
+                                                        ? 'border-violet-500 bg-violet-500/15 text-violet-300'
+                                                        : 'border-white/8 bg-white/2 text-white/60 hover:border-white/20 hover:text-white/80'
                                                         }`}>
                                                     <span className={`font-mono mr-2 ${selected ? 'text-violet-400' : 'text-emerald-400/60'}`}>
                                                         {OPTS[oi]}.
@@ -148,27 +206,39 @@ const LessonModal = ({ lesson, onClose, onStartQuiz }) => (
 );
 
 // ─── Lesson Card ───────────────────────────────────────────────────────────────
-const LessonCard = ({ lesson, onOpen }) => (
+const LessonCard = ({ lesson, onOpen, isCompleted }) => (
     <div onClick={() => onOpen(lesson)}
-        className="group p-5 rounded-2xl border border-white/8 bg-white/2 hover:bg-white/5 hover:border-white/15 cursor-pointer transition-all duration-200">
+        className={`group p-5 rounded-2xl border cursor-pointer transition-all duration-200 ${isCompleted
+            ? 'border-yellow-500/40 bg-yellow-500/5 hover:bg-yellow-500/8 hover:border-yellow-500/60'
+            : 'border-white/8 bg-white/2 hover:bg-white/5 hover:border-white/15'
+            }`}>
         <div className="flex items-center justify-between mb-3">
             <span className="text-xs px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/20">
                 {lesson.category}
             </span>
-            {lesson.isActive && (
-                <span className="text-xs flex items-center gap-1 text-emerald-400">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Live
-                </span>
-            )}
+            <div className="flex items-center gap-2">
+                {isCompleted && (
+                    <span className="text-xs flex items-center gap-1 text-yellow-400 font-semibold">
+                        ✅ Completed
+                    </span>
+                )}
+                {lesson.isActive && !isCompleted && (
+                    <span className="text-xs flex items-center gap-1 text-emerald-400">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Live
+                    </span>
+                )}
+            </div>
         </div>
-        <h3 className="font-semibold text-white text-sm mb-1.5 group-hover:text-emerald-300 transition-colors">{lesson.title}</h3>
+        <h3 className={`font-semibold text-sm mb-1.5 transition-colors ${isCompleted ? 'text-yellow-200 group-hover:text-yellow-100' : 'text-white group-hover:text-emerald-300'}`}>
+            {lesson.title}
+        </h3>
         <p className="text-white/35 text-xs line-clamp-2 mb-4">{lesson.content?.slice(0, 120)}…</p>
         {lesson.teacherId && (
             <p className="text-xs text-white/25">{lesson.teacherId.name} · {lesson.teacherId.subject}</p>
         )}
         <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between">
-            <span className="text-xs text-white/30">Open lesson</span>
-            <span className="text-violet-400 text-sm group-hover:translate-x-1 transition-transform">→</span>
+            <span className="text-xs text-white/30">{isCompleted ? 'Revisit lesson' : 'Open lesson'}</span>
+            <span className={`text-sm group-hover:translate-x-1 transition-transform ${isCompleted ? 'text-yellow-400' : 'text-violet-400'}`}>→</span>
         </div>
     </div>
 );
@@ -183,6 +253,14 @@ const MissionsPage = () => {
     const [selectedLesson, setSelectedLesson] = useState(null);
     const [quizLesson, setQuizLesson] = useState(null);
 
+    // Read completedLessons from localStorage — refreshed after quest completion
+    const getCompletedIds = () => {
+        try {
+            return JSON.parse(localStorage.getItem('user') || '{}').completedLessons || [];
+        } catch { return []; }
+    };
+    const [completedIds, setCompletedIds] = useState(getCompletedIds);
+
     const user = JSON.parse(localStorage.getItem('user') || '{}');
 
     const load = useCallback(async () => {
@@ -195,10 +273,20 @@ const MissionsPage = () => {
 
     useEffect(() => { load(); }, [load]);
 
+    // Called by QuizModal after "Claim Rewards" — refreshes both lesson list and completedIds
+    const handleQuestComplete = useCallback(() => {
+        setCompletedIds(getCompletedIds());  // pick up the just-refreshed localStorage
+        setQuizLesson(null);
+        setSelectedLesson(null);
+        load();
+    }, [load]);
+
     const filtered = lessons.filter(l =>
         l.title.toLowerCase().includes(search.toLowerCase()) ||
         l.category.toLowerCase().includes(search.toLowerCase())
     );
+
+    const completedCount = filtered.filter(l => completedIds.includes(l._id)).length;
 
     return (
         <div className="min-h-screen bg-slate-900 text-white">
@@ -210,7 +298,14 @@ const MissionsPage = () => {
                         <span className="text-white/15">|</span>
                         <span className="font-semibold text-white text-sm">My Lessons</span>
                     </div>
-                    <span className="text-xs text-white/30">{user.name}</span>
+                    <div className="flex items-center gap-3">
+                        {completedCount > 0 && (
+                            <span className="text-xs text-yellow-400/80 font-medium">
+                                ✅ {completedCount} completed
+                            </span>
+                        )}
+                        <span className="text-xs text-white/30">{user.name}</span>
+                    </div>
                 </div>
             </header>
 
@@ -267,7 +362,12 @@ const MissionsPage = () => {
                 ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         {filtered.map(lesson => (
-                            <LessonCard key={lesson._id} lesson={lesson} onOpen={setSelectedLesson} />
+                            <LessonCard
+                                key={lesson._id}
+                                lesson={lesson}
+                                onOpen={setSelectedLesson}
+                                isCompleted={completedIds.includes(lesson._id)}
+                            />
                         ))}
                     </div>
                 )}
@@ -280,7 +380,9 @@ const MissionsPage = () => {
                     onStartQuiz={() => { setQuizLesson(selectedLesson); setSelectedLesson(null); }} />
             )}
             {quizLesson && (
-                <QuizModal lesson={quizLesson} onClose={() => setQuizLesson(null)} />
+                <QuizModal lesson={quizLesson}
+                    onClose={() => setQuizLesson(null)}
+                    onQuestComplete={handleQuestComplete} />
             )}
         </div>
     );
