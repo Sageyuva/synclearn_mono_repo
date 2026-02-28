@@ -2,23 +2,32 @@ const LessonModel = require("../Models/LessonModel")
 const { serviceOk, serviceFail } = require("../Utils/ResponseUtils")
 
 // Create a new lesson
-const createLesson = async (title, content, category, teacherId) => {
-    const lesson = await LessonModel.create({ title, content, category, teacherId })
+const createLesson = async (title, content, category, teacherId, isPublished = false) => {
+    const lesson = await LessonModel.create({ title, content, category, teacherId, isPublished })
     return serviceOk("Lesson created successfully", lesson, 201)
 }
 
 // Get all active lessons (populate teacher name)
-const getAllLessons = async () => {
-    const lessons = await LessonModel.find({ isActive: true })
+const getAllLessons = async (role) => {
+    const filter = { isActive: true }
+    if (role === "student") {
+        filter.isPublished = true
+    }
+    const lessons = await LessonModel.find(filter)
         .populate("teacherId", "name subject")
         .sort({ createdAt: -1 })
     return serviceOk("Lessons fetched", lessons)
 }
 
 // Get single lesson by ID
-const getLessonById = async (id) => {
-    const lesson = await LessonModel.findById(id).populate("teacherId", "name subject")
-    if (!lesson) return serviceFail(404, "Lesson not found")
+const getLessonById = async (id, role) => {
+    const filter = { _id: id }
+    if (role === "student") {
+        filter.isPublished = true
+        filter.isActive = true
+    }
+    const lesson = await LessonModel.findOne(filter).populate("teacherId", "name subject")
+    if (!lesson) return serviceFail(404, "Lesson not found or unavailable")
     return serviceOk("Lesson fetched", lesson)
 }
 

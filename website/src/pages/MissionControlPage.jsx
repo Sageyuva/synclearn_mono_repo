@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Layout from '../components/Layout';
-import { getAllLessons, createLesson, deleteLesson, getQuizForLesson, createQuiz, deleteQuiz } from '../api/missionService';
+import { getAllLessons, createLesson, deleteLesson, getQuizForLesson, createQuiz, deleteQuiz, updateLesson } from '../api/missionService';
 import { showToast } from '../utils/toast';
 
 const EMPTY_QUESTION = () => ({ questionText: '', options: ['', '', '', ''], correctAns: 0 });
-const EMPTY_QUIZ = () => Array.from({ length: 5 }, EMPTY_QUESTION);
+const EMPTY_QUIZ = () => Array.from({ length: 1 }, EMPTY_QUESTION);
 
 // ─── Quiz Builder ─────────────────────────────────────────────────────────────
 const QuizBuilder = ({ lessonId, existingQuiz, onDone }) => {
@@ -23,6 +23,9 @@ const QuizBuilder = ({ lessonId, existingQuiz, onDone }) => {
             next[qi] = { ...next[qi], options: opts };
             return next;
         });
+
+    const addQuestion = () => setQuestions(prev => [...prev, EMPTY_QUESTION()]);
+    const removeQuestion = (index) => setQuestions(prev => prev.filter((_, i) => i !== index));
 
     const handleSave = async () => {
         for (let i = 0; i < questions.length; i++) {
@@ -52,7 +55,14 @@ const QuizBuilder = ({ lessonId, existingQuiz, onDone }) => {
         <div className="mt-4 space-y-4">
             {questions.map((q, qi) => (
                 <div key={qi} className="p-4 rounded-xl border border-white/8 bg-white/2">
-                    <p className="text-xs text-white/40 mb-2">Question {qi + 1}</p>
+                    <div className="flex justify-between items-center mb-2">
+                        <p className="text-xs text-white/40">Question {qi + 1}</p>
+                        {!existingQuiz && questions.length > 1 && (
+                            <button onClick={() => removeQuestion(qi)} className="text-xs text-red-400 hover:text-red-300">
+                                Remove
+                            </button>
+                        )}
+                    </div>
                     <input
                         className={inputCls + ' mb-3 text-sm'}
                         placeholder="Question text…"
@@ -84,6 +94,12 @@ const QuizBuilder = ({ lessonId, existingQuiz, onDone }) => {
                     </div>
                 </div>
             ))}
+            {!existingQuiz && (
+                <button onClick={addQuestion}
+                    className="w-full py-2 mb-4 rounded-xl text-sm font-semibold cursor-pointer border border-white/10 text-white/60 hover:text-white hover:bg-white/5 transition-all">
+                    + Add Question
+                </button>
+            )}
             <div>
                 {!existingQuiz ? (
                     <button onClick={handleSave} disabled={saving}
@@ -120,6 +136,13 @@ const LessonCard = ({ lesson, onDelete, onRefresh }) => {
 
     const toggle = () => { if (!expanded) loadQuiz(); setExpanded(p => !p); };
 
+    const handleTogglePublish = async () => {
+        try {
+            await updateLesson(lesson._id, { isPublished: !lesson.isPublished });
+            onRefresh();
+        } catch { }
+    };
+
     const handleDelete = async () => {
         setDeleting(true);
         try {
@@ -142,11 +165,18 @@ const LessonCard = ({ lesson, onDelete, onRefresh }) => {
                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />Live
                             </span>
                         )}
+                        <span className={`text-xs px-2 py-0.5 rounded-md border ${lesson.isPublished ? 'bg-violet-500/15 text-violet-300 border-violet-500/20' : 'bg-orange-500/15 text-orange-300 border-orange-500/20'}`}>
+                            {lesson.isPublished ? 'Published' : 'Draft'}
+                        </span>
                     </div>
                     <h3 className="font-semibold text-white text-sm">{lesson.title}</h3>
                     <p className="text-white/35 text-xs mt-1 line-clamp-2">{lesson.content?.slice(0, 120)}…</p>
                 </div>
                 <div className="flex gap-2 shrink-0">
+                    <button onClick={handleTogglePublish}
+                        className="text-xs px-3 py-1.5 rounded-lg cursor-pointer border border-white/10 text-white/50 hover:text-white hover:border-white/20 transition-colors">
+                        {lesson.isPublished ? 'Unpublish' : 'Publish'}
+                    </button>
                     <button onClick={toggle}
                         className="text-xs px-3 py-1.5 rounded-lg cursor-pointer border border-white/10 text-white/50 hover:text-white hover:border-white/20 transition-colors">
                         {expanded ? 'Close' : 'Quiz'}
@@ -175,7 +205,7 @@ const LessonCard = ({ lesson, onDelete, onRefresh }) => {
 const MissionControlPage = () => {
     const [lessons, setLessons] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [form, setForm] = useState({ title: '', content: '', category: '' });
+    const [form, setForm] = useState({ title: '', content: '', category: '', isPublished: false });
     const [creating, setCreating] = useState(false);
     const [showForm, setShowForm] = useState(false);
 
@@ -197,7 +227,7 @@ const MissionControlPage = () => {
         try {
             const res = await createLesson(form);
             setLessons(prev => [res.data, ...prev]);
-            setForm({ title: '', content: '', category: '' });
+            setForm({ title: '', content: '', category: '', isPublished: false });
             setShowForm(false);
             showToast.success('Lesson created!');
         } catch { } finally { setCreating(false); }
@@ -231,9 +261,13 @@ const MissionControlPage = () => {
                             <input className={inputCls} placeholder="Category (e.g. Math) *"
                                 value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))} required />
                         </div>
-                        <textarea className={`${inputCls} resize-none`} rows={5}
+                        <textarea className={`${inputCls} resize-none mb-4`} rows={5}
                             placeholder="Lesson content… *"
                             value={form.content} onChange={e => setForm(p => ({ ...p, content: e.target.value }))} required />
+                        <label className="flex items-center gap-2 mb-4 cursor-pointer w-max">
+                            <input type="checkbox" checked={form.isPublished} onChange={e => setForm(p => ({ ...p, isPublished: e.target.checked }))} className="w-4 h-4 accent-emerald-500" />
+                            <span className="text-sm text-white/80">Publish this lesson to students immediately</span>
+                        </label>
                         <button type="submit" disabled={creating}
                             className="mt-4 w-full py-3 rounded-xl font-semibold text-sm cursor-pointer disabled:opacity-50 bg-gradient-to-r from-emerald-600 to-teal-600 text-white transition-all">
                             {creating ? 'Creating…' : 'Create Lesson'}

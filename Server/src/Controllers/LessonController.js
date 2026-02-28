@@ -4,20 +4,20 @@ const { createLesson, getAllLessons, getLessonById, updateLesson, deleteLesson }
 
 // GET /api/v1/lesson
 const getAll = asyncHandler(async (req, res) => {
-    const result = await getAllLessons()
+    const result = await getAllLessons(req.user.role)
     return successResponse(res, result.statusCode, result.message, result.data)
 })
 
 // GET /api/v1/lesson/:id
 const getOne = asyncHandler(async (req, res) => {
-    const result = await getLessonById(req.params.id)
+    const result = await getLessonById(req.params.id, req.user.role)
     if (!result.success) return errorResponse(res, result.statusCode, result.message)
     return successResponse(res, result.statusCode, result.message, result.data)
 })
 
 // POST /api/v1/lesson  (teacher, admin)
 const create = asyncHandler(async (req, res) => {
-    const { title, content, category } = req.body
+    const { title, content, category, isPublished } = req.body
 
     // Teachers are always the owner of their lesson.
     // Admins must also supply a teacherId in the body (to attribute lessons to a teacher).
@@ -34,7 +34,7 @@ const create = asyncHandler(async (req, res) => {
         return errorResponse(res, 400, "teacherId is required for admin-created lessons")
     }
 
-    const result = await createLesson(title, content, category, teacherId)
+    const result = await createLesson(title, content, category, teacherId, isPublished)
     if (!result.success) return errorResponse(res, result.statusCode, result.message)
     return successResponse(res, result.statusCode, result.message, result.data)
 })

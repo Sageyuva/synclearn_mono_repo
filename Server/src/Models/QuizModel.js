@@ -11,7 +11,7 @@ const quizSchema = new mongoose.Schema({
     questions: {
         type: [questionSchema],
         required: true,
-        validate: v => v.length === 5,
+        validate: v => v.length > 0,
     },
 }, { timestamps: true })
 

@@ -8,8 +8,8 @@ const { serviceOk, serviceFail } = require("../Utils/ResponseUtils")
 const createQuiz = async (lessonId, questions) => {
     const existing = await QuizModel.findOne({ lessonId })
     if (existing) return serviceFail(409, "A quiz already exists for this lesson")
-    if (!questions || questions.length !== 5) {
-        return serviceFail(400, "A quiz must have exactly 5 questions")
+    if (!questions || questions.length === 0) {
+        return serviceFail(400, "A quiz must have at least 1 question")
     }
     const quiz = await QuizModel.create({ lessonId, questions })
     return serviceOk("Quiz created successfully", quiz, 201)
@@ -52,11 +52,12 @@ const submitQuiz = async (quizId, studentId, answers) => {
     const attempt = await QuizAttemptModel.create({ quizId, studentId, answers, score })
 
     // ── 3. Quest completion — use $addToSet to safely prevent duplicates ────────
-    const PASS_THRESHOLD = 3
+    const PASS_THRESHOLD = Math.ceil(quiz.questions.length * 0.6)
     let isFirstCompletion = false
     let bonusXP = 0
+    let isPassed = score >= PASS_THRESHOLD
 
-    if (score >= PASS_THRESHOLD) {
+    if (isPassed) {
         // Peek at CURRENT completedLessons before the update
         const before = await StudentModel.findById(studentId).select("completedLessons")
         const alreadyCompleted = before.completedLessons
@@ -85,6 +86,7 @@ const submitQuiz = async (quizId, studentId, answers) => {
     return serviceOk("Quiz submitted", {
         score,
         total: quiz.questions.length,
+        isPassed,
         bonusXP,
         isFirstCompletion,
         totalScore: updated.totalScore,

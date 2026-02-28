@@ -40,7 +40,7 @@ const QuizModal = ({ lesson, onClose, onQuestComplete }) => {
         try {
             const res = await submitQuiz(quiz._id, answers);
             setResult(res.data);
-            if (res.data.score >= 3) showToast.success(`Score: ${res.data.score}/${res.data.total} — Quest complete!`);
+            if (res.data.isPassed) showToast.success(`Score: ${res.data.score}/${res.data.total} — Quest complete!`);
             else showToast.error(`Score: ${res.data.score}/${res.data.total} — Try again!`);
         } catch { } finally { setSubmitting(false); }
     };
@@ -65,7 +65,7 @@ const QuizModal = ({ lesson, onClose, onQuestComplete }) => {
     };
 
     const OPTS = ['A', 'B', 'C', 'D'];
-    const passed = result && result.score >= 3;
+    const passed = result && result.isPassed;
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
