@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import confetti from 'canvas-confetti';
 import { getAllLessons, getQuizForLesson, submitQuiz, getAnnouncements } from '../api/missionService';
 import { showToast } from '../utils/toast';
+import { useMissionLock } from '../../../shared/hooks/useMissionLock';
+import QuizDuelView from '../components/QuizDuelView';
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 const fireConfetti = () => {
@@ -196,40 +198,54 @@ const LessonModal = ({ lesson, onClose, onStartQuiz }) => (
             </div>
             <div className="px-6 py-5">
                 <p className="text-white/75 text-sm leading-relaxed whitespace-pre-wrap">{lesson.content}</p>
-                <button onClick={onStartQuiz}
-                    className="mt-8 w-full py-3.5 rounded-xl font-semibold text-sm cursor-pointer bg-gradient-to-r from-emerald-600 to-violet-600 text-white hover:from-emerald-500 hover:to-violet-500 transition-all">
-                    Start Quiz →
-                </button>
+                <div className="mt-8 flex gap-4">
+                    <button onClick={() => onStartQuiz('solo')}
+                        className="flex-1 py-3.5 rounded-xl font-semibold text-sm cursor-pointer border border-emerald-500/50 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-all">
+                        Start Solo Quiz
+                    </button>
+                    <button onClick={() => onStartQuiz('duel')}
+                        className="flex-1 py-3.5 rounded-xl font-semibold text-sm cursor-pointer bg-gradient-to-r from-emerald-600 to-violet-600 text-white hover:from-emerald-500 hover:to-violet-500 transition-all shadow-lg shadow-violet-500/20">
+                        ⚔️ Start Duel
+                    </button>
+                </div>
             </div>
         </div>
     </div>
 );
 
 // ─── Lesson Card ───────────────────────────────────────────────────────────────
-const LessonCard = ({ lesson, onOpen, isCompleted }) => (
-    <div onClick={() => onOpen(lesson)}
-        className={`group p-5 rounded-2xl border cursor-pointer transition-all duration-200 ${isCompleted
-            ? 'border-yellow-500/40 bg-yellow-500/5 hover:bg-yellow-500/8 hover:border-yellow-500/60'
-            : 'border-white/8 bg-white/2 hover:bg-white/5 hover:border-white/15'
+const LessonCard = ({ lesson, onOpen, isCompleted, isLocked }) => (
+    <div onClick={() => !isLocked && onOpen(lesson)}
+        className={`group p-5 rounded-2xl border transition-all duration-200 ${isLocked
+            ? 'border-white/5 bg-white/5 opacity-50 cursor-not-allowed'
+            : isCompleted
+                ? 'border-yellow-500/40 bg-yellow-500/5 hover:bg-yellow-500/8 hover:border-yellow-500/60 cursor-pointer'
+                : 'border-white/8 bg-white/2 hover:bg-white/5 hover:border-white/15 cursor-pointer'
             }`}>
         <div className="flex items-center justify-between mb-3">
             <span className="text-xs px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/20">
                 {lesson.category}
             </span>
             <div className="flex items-center gap-2">
+                {isLocked && (
+                    <span className="text-xs flex items-center gap-1 text-red-400 font-semibold bg-red-500/10 px-2 py-0.5 rounded-md border border-red-500/20">
+                        🔒 Locked
+                    </span>
+                )}
                 {isCompleted && (
                     <span className="text-xs flex items-center gap-1 text-yellow-400 font-semibold">
                         ✅ Completed
                     </span>
                 )}
-                {lesson.isActive && !isCompleted && (
+                {lesson.isActive && !isCompleted && !isLocked && (
                     <span className="text-xs flex items-center gap-1 text-emerald-400">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Live
                     </span>
                 )}
             </div>
         </div>
-        <h3 className={`font-semibold text-sm mb-1.5 transition-colors ${isCompleted ? 'text-yellow-200 group-hover:text-yellow-100' : 'text-white group-hover:text-emerald-300'}`}>
+        <h3 className={`font-semibold text-sm mb-1.5 transition-colors ${isLocked ? 'text-white/50' : isCompleted ? 'text-yellow-200 group-hover:text-yellow-100' : 'text-white group-hover:text-emerald-300'
+            }`}>
             {lesson.title}
         </h3>
         <p className="text-white/35 text-xs line-clamp-2 mb-4">{lesson.content?.slice(0, 120)}…</p>
@@ -237,8 +253,15 @@ const LessonCard = ({ lesson, onOpen, isCompleted }) => (
             <p className="text-xs text-white/25">{lesson.teacherId.name} · {lesson.teacherId.subject}</p>
         )}
         <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between">
-            <span className="text-xs text-white/30">{isCompleted ? 'Revisit lesson' : 'Open lesson'}</span>
-            <span className={`text-sm group-hover:translate-x-1 transition-transform ${isCompleted ? 'text-yellow-400' : 'text-violet-400'}`}>→</span>
+            <span className="text-xs text-white/30">
+                {isLocked ? 'Complete previous to unlock' : isCompleted ? 'Revisit lesson' : 'Open lesson'}
+            </span>
+            {!isLocked && (
+                <span className={`text-sm group-hover:translate-x-1 transition-transform ${isCompleted ? 'text-yellow-400' : 'text-violet-400'}`}>→</span>
+            )}
+            {isLocked && (
+                <span className="text-sm text-red-500/50">🔒</span>
+            )}
         </div>
     </div>
 );
@@ -252,6 +275,9 @@ const MissionsPage = () => {
     const [search, setSearch] = useState('');
     const [selectedLesson, setSelectedLesson] = useState(null);
     const [quizLesson, setQuizLesson] = useState(null);
+    const [duelLesson, setDuelLesson] = useState(null);
+
+    const { isLocked } = useMissionLock();
 
     // Read completedLessons from localStorage — refreshed after quest completion
     const getCompletedIds = () => {
@@ -277,6 +303,7 @@ const MissionsPage = () => {
     const handleQuestComplete = useCallback(() => {
         setCompletedIds(getCompletedIds());  // pick up the just-refreshed localStorage
         setQuizLesson(null);
+        setDuelLesson(null);
         setSelectedLesson(null);
         load();
     }, [load]);
@@ -361,28 +388,59 @@ const MissionsPage = () => {
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {filtered.map(lesson => (
-                            <LessonCard
-                                key={lesson._id}
-                                lesson={lesson}
-                                onOpen={setSelectedLesson}
-                                isCompleted={completedIds.includes(lesson._id)}
-                            />
-                        ))}
+                        {filtered.map(lesson => {
+                            // MissionsPage is ONLY used by students (client app)
+                            const locked = isLocked(lesson, false);
+                            return (
+                                <LessonCard
+                                    key={lesson._id}
+                                    lesson={lesson}
+                                    onOpen={setSelectedLesson}
+                                    isCompleted={completedIds.includes(lesson._id)}
+                                    isLocked={locked}
+                                />
+                            );
+                        })}
                     </div>
                 )}
             </div>
 
             {/* Modals */}
-            {selectedLesson && !quizLesson && (
+            {selectedLesson && !quizLesson && !duelLesson && (
                 <LessonModal lesson={selectedLesson}
                     onClose={() => setSelectedLesson(null)}
-                    onStartQuiz={() => { setQuizLesson(selectedLesson); setSelectedLesson(null); }} />
+                    onStartQuiz={(mode) => {
+                        if (mode === 'duel') {
+                            setDuelLesson(selectedLesson);
+                        } else {
+                            setQuizLesson(selectedLesson);
+                        }
+                        setSelectedLesson(null);
+                    }} />
             )}
+
             {quizLesson && (
                 <QuizModal lesson={quizLesson}
                     onClose={() => setQuizLesson(null)}
                     onQuestComplete={handleQuestComplete} />
+            )}
+
+            {duelLesson && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/95 backdrop-blur-sm">
+                    <div className="w-full max-w-2xl">
+                        <QuizDuelView
+                            lesson={duelLesson}
+                            quiz={duelLesson} // Simplified; the View hooks to the API internally or we just pass the ID.
+                            onClose={() => setDuelLesson(null)}
+                            onMatchComplete={(scores) => {
+                                // If they win, you could trigger handleQuestComplete. For now, just close.
+                                if (scores.me >= 4) {
+                                    showToast.success('Victory! Bonus XP unlocked.');
+                                }
+                            }}
+                        />
+                    </div>
+                </div>
             )}
         </div>
     );

@@ -168,6 +168,14 @@ const LessonCard = ({ lesson, onDelete, onRefresh }) => {
                         <span className={`text-xs px-2 py-0.5 rounded-md border ${lesson.isPublished ? 'bg-violet-500/15 text-violet-300 border-violet-500/20' : 'bg-orange-500/15 text-orange-300 border-orange-500/20'}`}>
                             {lesson.isPublished ? 'Published' : 'Draft'}
                         </span>
+                        <span className="text-xs px-2 py-0.5 rounded-md bg-white/10 text-white/80 border border-white/20">
+                            Order: {lesson.sequenceOrder}
+                        </span>
+                        {lesson.isBounty && (
+                            <span className="text-xs flex items-center gap-1 text-amber-400 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-md font-bold">
+                                💰 Bounty
+                            </span>
+                        )}
                     </div>
                     <h3 className="font-semibold text-white text-sm">{lesson.title}</h3>
                     <p className="text-white/35 text-xs mt-1 line-clamp-2">{lesson.content?.slice(0, 120)}…</p>
@@ -205,7 +213,7 @@ const LessonCard = ({ lesson, onDelete, onRefresh }) => {
 const MissionControlPage = () => {
     const [lessons, setLessons] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [form, setForm] = useState({ title: '', content: '', category: '', isPublished: false });
+    const [form, setForm] = useState({ title: '', content: '', category: '', isPublished: false, sequenceOrder: 0, isBounty: false });
     const [creating, setCreating] = useState(false);
     const [showForm, setShowForm] = useState(false);
 
@@ -227,7 +235,7 @@ const MissionControlPage = () => {
         try {
             const res = await createLesson(form);
             setLessons(prev => [res.data, ...prev]);
-            setForm({ title: '', content: '', category: '', isPublished: false });
+            setForm({ title: '', content: '', category: '', isPublished: false, sequenceOrder: 0, isBounty: false });
             setShowForm(false);
             showToast.success('Lesson created!');
         } catch { } finally { setCreating(false); }
@@ -260,14 +268,22 @@ const MissionControlPage = () => {
                                 value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))} required />
                             <input className={inputCls} placeholder="Category (e.g. Math) *"
                                 value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))} required />
+                            <input className={inputCls} type="number" placeholder="Sequence Order (e.g. 1)"
+                                value={form.sequenceOrder} onChange={e => setForm(p => ({ ...p, sequenceOrder: Number(e.target.value) }))} required />
                         </div>
                         <textarea className={`${inputCls} resize-none mb-4`} rows={5}
                             placeholder="Lesson content… *"
                             value={form.content} onChange={e => setForm(p => ({ ...p, content: e.target.value }))} required />
-                        <label className="flex items-center gap-2 mb-4 cursor-pointer w-max">
-                            <input type="checkbox" checked={form.isPublished} onChange={e => setForm(p => ({ ...p, isPublished: e.target.checked }))} className="w-4 h-4 accent-emerald-500" />
-                            <span className="text-sm text-white/80">Publish this lesson to students immediately</span>
-                        </label>
+                        <div className="flex flex-wrap gap-4 mb-4">
+                            <label className="flex items-center gap-2 cursor-pointer w-max">
+                                <input type="checkbox" checked={form.isPublished} onChange={e => setForm(p => ({ ...p, isPublished: e.target.checked }))} className="w-4 h-4 accent-emerald-500" />
+                                <span className="text-sm text-white/80">Publish this lesson immediately</span>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer w-max">
+                                <input type="checkbox" checked={form.isBounty} onChange={e => setForm(p => ({ ...p, isBounty: e.target.checked }))} className="w-4 h-4 accent-amber-500" />
+                                <span className="text-sm text-white/80">Mark as Bounty Lesson</span>
+                            </label>
+                        </div>
                         <button type="submit" disabled={creating}
                             className="mt-4 w-full py-3 rounded-xl font-semibold text-sm cursor-pointer disabled:opacity-50 bg-gradient-to-r from-emerald-600 to-teal-600 text-white transition-all">
                             {creating ? 'Creating…' : 'Create Lesson'}
